@@ -8,6 +8,7 @@ I've leveraged [cvlab-epfl's implementation](https://github.com/cvlab-epfl/gauss
 
 Online demo: [https://splatting.marcussvensson.com](https://splatting.marcussvensson.com)
 
+![Alt text](viewer.jpg)
 
 #### Future work and opportunities:
 
