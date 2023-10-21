@@ -34,6 +34,8 @@ This implementation falls significantly short of optimal performance, leaving mu
 
 With that said there's still plenty of room for optimization, and I'm confident that the performance will be significantly improved with further work. I've included a few ideas for future work in the section above.
 
+If you want to access precise timings for individual segments of the GPU pipeline, I've incorporated timestamps for different phases. This feature is currently in an experimental state within the web browser and is concealed behind a flag. To activate this flag, you can launch Chrome with the following command: ```--enable-dawn-features=allow_unsafe_apis```. Subsequently, you can view the logs in the console output.
+
 ## Develop
 
 Navigate to the code directory and run
