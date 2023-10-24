@@ -20,13 +20,6 @@ function get_shader_radix_scan(
   const num_wg_prefixes =
     num_workgroups * Math.max(2, NUM_BITS_IN_CHUNK) * NUM_BITS_IN_CHUNK
 
-  console.log('numInputs', numInputs)
-  console.log('num_workgroups', num_workgroups)
-  console.log('last_wg_padding', last_wg_padding)
-  console.log('num_wg_prefixes', num_wg_prefixes)
-  console.log('twoPowBits', twoPowBits)
-  console.log('-------')
-
   let shader = ''
 
   if (sync) {

@@ -453,14 +453,16 @@ export class Preprocessor {
     this.context.device.queue.submit([commandEncoder.finish()])
 
     await this.auxBufferRead.mapAsync(GPUMapMode.READ, 0, 4)
-    const numIntersections = new Uint32Array(
+    this.numIntersections = new Uint32Array(
       this.auxBufferRead.getMappedRange(0, 4),
-    )
+    )[0]!
+
+    console.log('numIntersections', this.numIntersections)
 
     const { values: sortedValuesRadix } = this.radixSorter.sort(
       this.tileDepthKeyBuffer,
       numTilesArray,
-      // numIntersections[0],
+      // this.numIntersections,
     )
 
     this.auxBufferRead.unmap()

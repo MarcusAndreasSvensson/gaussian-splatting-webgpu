@@ -81,7 +81,9 @@ fn main(
   let i = thread_idx + block_idx * 256;
 
 
-  if(i >= num_quads_unpaddded) {return;}
+  if(i >= num_quads_unpaddded) {
+    return;
+  }
 
   let point: PointInput = points[i];
 
@@ -89,7 +91,16 @@ fn main(
   let world_pos = vec4(point.position, 1.0);  
   let camera_pos = uniforms.viewMatrix * world_pos;
 
-  if(!in_frustum(world_pos)) {return;}
+  if(!in_frustum(world_pos)) {
+    return;
+  }
+
+  let opacity = sigmoid(point.opacity_logit);
+
+  // TODO: Make this culling a bit less aggressive when numIntersections is lowered some other way
+  if(opacity < 0.03) {
+    return;
+  }
 
   let p_hom = uniforms.projMatrix * world_pos;
   let p_w = 1.0f / (p_hom.w + 0.0000001f);
@@ -144,7 +155,7 @@ fn main(
   let color = compute_color_from_sh(world_pos.xyz, point.sh);
   // let color = vec3(0.0);
 
-  let opacity = sigmoid(point.opacity_logit);
+  
   
   var tiles_touched = 0u;
   
