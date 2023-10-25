@@ -97,12 +97,6 @@ fn main(
     max_value = max(max_value, intersection_key_offsets[i]);
   }
 
-  textureStore(
-    color_buffer,
-    vec2<i32>(global_id_x, global_id_y),
-    vec4<f32>(0.0, 0.0, 0.0, 1.0)
-  );
-
 
   let base_offset = u32(intersection_array_length) - auxData.num_intersections;
   
@@ -189,14 +183,14 @@ fn main(
     color_21 += gauss_data[gauss_id].color * (alpha_21 * transparency_21);
     color_31 += gauss_data[gauss_id].color * (alpha_31 * transparency_31);
 
-    transparency_00 *= (1.0f - alpha_00);
-    transparency_10 *= (1.0f - alpha_10);
-    transparency_20 *= (1.0f - alpha_20);
-    transparency_30 *= (1.0f - alpha_30);
-    transparency_01 *= (1.0f - alpha_01);
-    transparency_11 *= (1.0f - alpha_11);
-    transparency_21 *= (1.0f - alpha_21);
-    transparency_31 *= (1.0f - alpha_31);
+    transparency_00 *= (1.0 - alpha_00);
+    transparency_10 *= (1.0 - alpha_10);
+    transparency_20 *= (1.0 - alpha_20);
+    transparency_30 *= (1.0 - alpha_30);
+    transparency_01 *= (1.0 - alpha_01);
+    transparency_11 *= (1.0 - alpha_11);
+    transparency_21 *= (1.0 - alpha_21);
+    transparency_31 *= (1.0 - alpha_31);
 
     let transparency_0 = max(max(transparency_00, transparency_10), max(transparency_20, transparency_30));
     let transparency_1 = max(max(transparency_01, transparency_11), max(transparency_21, transparency_31));
@@ -204,18 +198,23 @@ fn main(
     if(max(transparency_0, transparency_1) < 1.0 / 255.0) {
       break;
     }
-
   }
 
 
-  
-
-  textureStore(color_buffer, vec2(global_id_x, global_id_y) + vec2(0, 0), vec4(color_00, 1.0)); //transparency_00));
-  textureStore(color_buffer, vec2(global_id_x, global_id_y) + vec2(1, 0), vec4(color_10, 1.0)); //transparency_10));
-  textureStore(color_buffer, vec2(global_id_x, global_id_y) + vec2(2, 0), vec4(color_20, 1.0)); //transparency_20));
-  textureStore(color_buffer, vec2(global_id_x, global_id_y) + vec2(3, 0), vec4(color_30, 1.0)); //transparency_30));
-  textureStore(color_buffer, vec2(global_id_x, global_id_y) + vec2(0, 1), vec4(color_01, 1.0)); //transparency_01));
-  textureStore(color_buffer, vec2(global_id_x, global_id_y) + vec2(1, 1), vec4(color_11, 1.0)); //transparency_11));
-  textureStore(color_buffer, vec2(global_id_x, global_id_y) + vec2(2, 1), vec4(color_21, 1.0)); //transparency_21));
-  textureStore(color_buffer, vec2(global_id_x, global_id_y) + vec2(3, 1), vec4(color_31, 1.0)); //transparency_31));
+  // textureStore(color_buffer, vec2(global_id_x, global_id_y) + vec2(0, 0), vec4(color_00, max(1.0, transparency_00)));
+  // textureStore(color_buffer, vec2(global_id_x, global_id_y) + vec2(1, 0), vec4(color_10, max(1.0, transparency_10)));
+  // textureStore(color_buffer, vec2(global_id_x, global_id_y) + vec2(2, 0), vec4(color_20, max(1.0, transparency_20)));
+  // textureStore(color_buffer, vec2(global_id_x, global_id_y) + vec2(3, 0), vec4(color_30, max(1.0, transparency_30)));
+  // textureStore(color_buffer, vec2(global_id_x, global_id_y) + vec2(0, 1), vec4(color_01, max(1.0, transparency_01)));
+  // textureStore(color_buffer, vec2(global_id_x, global_id_y) + vec2(1, 1), vec4(color_11, max(1.0, transparency_11)));
+  // textureStore(color_buffer, vec2(global_id_x, global_id_y) + vec2(2, 1), vec4(color_21, max(1.0, transparency_21)));
+  // textureStore(color_buffer, vec2(global_id_x, global_id_y) + vec2(3, 1), vec4(color_31, max(1.0, transparency_31)));
+  textureStore(color_buffer, vec2(global_id_x, global_id_y) + vec2(0, 0), vec4(color_00, 1.0));
+  textureStore(color_buffer, vec2(global_id_x, global_id_y) + vec2(1, 0), vec4(color_10, 1.0));
+  textureStore(color_buffer, vec2(global_id_x, global_id_y) + vec2(2, 0), vec4(color_20, 1.0));
+  textureStore(color_buffer, vec2(global_id_x, global_id_y) + vec2(3, 0), vec4(color_30, 1.0));
+  textureStore(color_buffer, vec2(global_id_x, global_id_y) + vec2(0, 1), vec4(color_01, 1.0));
+  textureStore(color_buffer, vec2(global_id_x, global_id_y) + vec2(1, 1), vec4(color_11, 1.0));
+  textureStore(color_buffer, vec2(global_id_x, global_id_y) + vec2(2, 1), vec4(color_21, 1.0));
+  textureStore(color_buffer, vec2(global_id_x, global_id_y) + vec2(3, 1), vec4(color_31, 1.0));
 }
