@@ -2,9 +2,6 @@ const sh_degree = 3;
 const n_sh_coeffs = 16;
 const intersection_array_length = 1;
 
-const BLOCK_X = 16;
-const BLOCK_Y = 16;
-
 struct GaussData {
   id: i32,
   radii: i32,  // Also signals whether this Gaussian is in frustum.
@@ -42,10 +39,21 @@ struct TileDepthKey {
 }
 
 
+struct SharedData {
+  conic: vec3<f32>,
+  color: vec4<f32>,
+  xy: vec2<f32>,
+};
+
+var<workgroup> shared_data: array<SharedData, 256>;
+
 var<workgroup> start_offset_shared: i32;
 var<workgroup> end_offset_shared: i32;
+var<workgroup> num_passes_shared: i32;
 
 
+const BLOCK_X = 16;
+const BLOCK_Y = 16;
 
 @group(0) @binding(0) var color_buffer: texture_storage_2d<rgba8unorm, write>;
 @group(0) @binding(1) var<uniform> uniforms: Uniforms;
@@ -53,6 +61,7 @@ var<workgroup> end_offset_shared: i32;
 @group(0) @binding(3) var<storage, read_write> intersection_keys: array<TileDepthKey>;
 @group(0) @binding(4) var<storage, read_write> intersection_key_offsets: array<u32>;
 @group(0) @binding(5) var<storage, read_write> auxData: AuxData;
+
 
 
 @compute @workgroup_size(16, 16)
@@ -89,22 +98,7 @@ fn main(
   let thread_idx = i32(local_invocation_index);
 
 
-  let value = intersection_key_offsets[tile_id];
-  var max_value = 0u;
-
-  for (var i = 0u; i < num_groups; i++) {
-    max_value = max(max_value, intersection_key_offsets[i]);
-  }
-
-
-  textureStore(
-    color_buffer,
-    vec2<i32>(global_id_x, global_id_y),
-    vec4<f32>(0.0, 0.0, 0.0, 1.0)
-  );
-
-
-
+  // TODO: Reduce this global fetch
   let base_offset = u32(intersection_array_length) - auxData.num_intersections;
   
   if(thread_idx == 0) {
@@ -118,71 +112,106 @@ fn main(
     }
 
     start_offset_shared = i32(start_offset);
-    end_offset_shared = i32(end_offset);
+    end_offset_shared = i32(end_offset); 
   }
 
-  var accumulated_color: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
-  var accumulated_opacity: f32 = 0.0;
-  
-  var t_i: f32 = 1.0; // The initial value of accumulated alpha (initial value of accumulated multiplication)
 
-  
   workgroupBarrier();
+
+
+  var accumulated_color: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);  
+  var t_i: f32 = 1.0; // The initial value of accumulated alpha (initial value of accumulated multiplication)
 
   let start_offset_local = workgroupUniformLoad(&start_offset_shared);
   let end_offset_local = workgroupUniformLoad(&end_offset_shared);
 
+  
 
-  for (var idx = start_offset_local; idx < end_offset_local; idx++) {
-    
+  // TODO: optimize this loop, this is the main bottleneck
+  let num_passes = (i32(end_offset_local - start_offset_local) / 256) + 1;
+
+  for (var pass_idx = 0; pass_idx < num_passes; pass_idx++) {
+
     workgroupBarrier();
 
-    let i = base_offset + u32(idx);
+		
+    let key_idx = base_offset + u32(start_offset_local) + u32(pass_idx * 256) + u32(thread_idx);
 
-    let gauss_id = intersection_keys[i].gauss_id;
+    // TODO: Reduce this global fetch
+    // about 7ms on trunk
+    let gauss_id = intersection_keys[key_idx].gauss_id;
+    let gauss = gauss_data[gauss_id];
 
-    let conic = gauss_data[gauss_id].conic;
-    let opacity = gauss_data[gauss_id].opacity;
-    let xy = vec2(
-      gauss_data[gauss_id].uv.x * f32(uniforms.screen_size.x),
-      gauss_data[gauss_id].uv.y * f32(uniforms.screen_size.y),
+    shared_data[thread_idx] = SharedData(
+      gauss.conic,
+      vec4(gauss.color, gauss.opacity),
+      vec2(
+        gauss.uv.x * f32(uniforms.screen_size.x),
+        gauss.uv.y * f32(uniforms.screen_size.y),  
+      )
     );
 
     let xy_pixel = vec2(
-      u * f32(uniforms.screen_size.x),
-      v * f32(uniforms.screen_size.y)
-    );
+        u * f32(uniforms.screen_size.x),
+        v * f32(uniforms.screen_size.y)
+      );
 
-    var distance = vec2(
-      xy.x - xy_pixel.x,
-      xy.y - xy_pixel.y
-    );
+    
+    for (var idx = 0; idx < 256; idx++) {      
+      workgroupBarrier();  
 
-    let power = -0.5 *
-      (conic.x * distance.x * distance.x + conic.z * distance.y * distance.y) -
-      conic.y * distance.x * distance.y;
+      let i = base_offset + u32(start_offset_local) + u32(pass_idx * 256) + u32(idx);
+
+      let gauss = shared_data[idx];
+
+      let conic = gauss.conic;
+      let opacity = gauss.color.a;
+      let color = gauss.color.rgb;
+      let xy = gauss.xy;
+
+      
+      var distance = vec2(
+        xy.x - xy_pixel.x,
+        xy.y - xy_pixel.y
+      );
+
+      let power = -0.5 *
+        (conic.x * distance.x * distance.x + conic.z * distance.y * distance.y) -
+        conic.y * distance.x * distance.y;
 
 
-    let alpha = min(0.99, opacity * exp(power));
+      // Eq. (2) from 3D Gaussian splatting paper.
+      // Obtain alpha by multiplying with Gaussian opacity
+      // and its exponential falloff from mean.
+      // Avoid numerical instabilities (see paper appendix).
 
-    let test_t = t_i * (1.0 - alpha);
+      let alpha = min(0.99, opacity * exp(power));
+      let test_t = t_i * (1.0 - alpha);
 
-    if(
-      power <= 0.0f && 
-      alpha >= 1.0 / 255.0 && 
-      test_t >= 0.0001f
-    ) {
-      accumulated_color += gauss_data[gauss_id].color * alpha * t_i;
+     
 
-      t_i = test_t;
+      // Checks that the gaussian is within the tile
+      let index_condition = f32(pass_idx * 256 + idx < end_offset_local - start_offset_local);
+      let condition = f32(power <= 0.0f && alpha >= 1.0 / 255.0 && test_t >= 0.0001f);
+
+      let final_condition = index_condition * condition;
+
+      accumulated_color += final_condition * color * alpha * t_i;
+
+      t_i = final_condition * test_t + (1.0 - final_condition) * t_i;
+
     }
 
   }
 
 
-  textureStore(
-    color_buffer,
-    vec2<i32>(global_id_x, global_id_y),
-    vec4<f32>(accumulated_color, 1.0)
-  );
+
+  var is_inside_viewport = true;
+  if (is_inside_viewport) {
+    textureStore(
+      color_buffer,
+      vec2<i32>(global_id_x, global_id_y),
+      vec4<f32>(accumulated_color, 1.0)
+    );
+  }
 }
