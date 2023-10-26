@@ -150,7 +150,7 @@ export class RadixSort {
   buf_data: GPUBuffer
   buf_tmp: GPUBuffer[]
 
-  bits = 0
+  bits = 16
   bitsOffset = 0
   buf_constant_radix_scan: GPUBuffer
 
