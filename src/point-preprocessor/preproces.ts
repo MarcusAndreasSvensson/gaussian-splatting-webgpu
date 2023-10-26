@@ -12,8 +12,8 @@ import { PackedGaussians } from '@/splatting-web/ply'
 
 import { GpuContext } from '@/point-preprocessor/gpuContext'
 import { Renderer } from '@/splatting-web/renderer'
-import shader from './preprocessShader.wgsl?raw'
-import tileDepthShader from './tileDepthKeyShader.wgsl?raw'
+import shader from './gauss.wgsl?raw'
+import tileDepthShader from './tileDepthKey.wgsl?raw'
 
 function nextPowerOfTwo(x: number): number {
   return Math.pow(2, Math.ceil(Math.log2(x)))
@@ -445,8 +445,8 @@ export class Preprocessor {
     const tileDepthKeyPassEncoder = commandEncoder.beginComputePass()
     tileDepthKeyPassEncoder.setPipeline(this.tileDepthKeyPipeline)
     tileDepthKeyPassEncoder.setBindGroup(0, this.bindGroup)
-    tileDepthKeyPassEncoder.dispatchWorkgroups(this.numTiles)
-    // tileDepthKeyPassEncoder.dispatchWorkgroups(this.numGaussians / 256 + 1)
+    // tileDepthKeyPassEncoder.dispatchWorkgroups(this.numTiles)
+    tileDepthKeyPassEncoder.dispatchWorkgroups(this.numGaussians / 256 + 1)
     tileDepthKeyPassEncoder.end()
 
     this.renderer.timestamp(commandEncoder, 'tile depth key')

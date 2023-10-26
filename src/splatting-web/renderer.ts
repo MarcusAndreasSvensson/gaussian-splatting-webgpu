@@ -13,8 +13,8 @@ import { Mat4 } from 'wgpu-matrix'
 import { InteractiveCamera } from './camera'
 import { Mat4x4, Struct, f32, u32, vec2, vec3 } from './packing'
 import { PackedGaussians } from './ply'
-import computeKernel from './shaders/computeKernel.wgsl?raw'
-import screenShader from './shaders/screenShader.wgsl?raw'
+import computeKernel from './shaders/rasterize.wgsl?raw'
+import screenShader from './shaders/screen.wgsl?raw'
 
 import { Preprocessor } from '@/point-preprocessor/preproces'
 
