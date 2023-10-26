@@ -51,7 +51,7 @@ var<workgroup> end_offset_shared: i32;
 @group(0) @binding(1) var<uniform> uniforms: Uniforms;
 @group(0) @binding(2) var<storage, read_write> gauss_data: array<GaussData>;
 @group(0) @binding(3) var<storage, read_write> intersection_keys: array<TileDepthKey>;
-@group(0) @binding(4) var<storage, read_write> intersection_key_offsets: array<u32>;
+@group(0) @binding(4) var<storage, read_write> intersection_offsets: array<u32>;
 @group(0) @binding(5) var<storage, read_write> auxData: AuxData;
 
 
@@ -90,14 +90,6 @@ fn main(
   let thread_idx = i32(local_invocation_index);
 
 
-  let value = intersection_key_offsets[tile_id];
-  var max_value = 0u;
-
-  for (var i = 0u; i < num_groups; i++) {
-    max_value = max(max_value, intersection_key_offsets[i]);
-  }
-
-
   let base_offset = u32(intersection_array_length) - auxData.num_intersections;
   
   if(thread_idx == 0) {
@@ -106,8 +98,8 @@ fn main(
     var end_offset = 0u;
 
     for (var i = 0; i <= tile_id; i++) {
-      end_offset += intersection_key_offsets[i];
-      start_offset = end_offset - intersection_key_offsets[i];
+      end_offset += intersection_offsets[i];
+      start_offset = end_offset - intersection_offsets[i];
     }
 
     start_offset_shared = i32(start_offset);

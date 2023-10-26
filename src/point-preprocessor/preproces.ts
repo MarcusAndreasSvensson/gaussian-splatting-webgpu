@@ -12,7 +12,8 @@ import { PackedGaussians } from '@/splatting-web/ply'
 
 import { GpuContext } from '@/point-preprocessor/gpuContext'
 import { Renderer } from '@/splatting-web/renderer'
-import shader from './gauss.wgsl?raw'
+import gaussShader from './gauss.wgsl?raw'
+import prefixSumShader from './prefixSum.wgsl?raw'
 import tileDepthShader from './tileDepthKey.wgsl?raw'
 
 function nextPowerOfTwo(x: number): number {
@@ -71,7 +72,7 @@ export class Preprocessor {
   pipelineLayout: GPUPipelineLayout
   pipeline: GPUComputePipeline
   cumSumPipeline: GPUComputePipeline
-  cumSumFinalPipeline: GPUComputePipeline
+  cumSumSyncPipeline: GPUComputePipeline
   tileDepthKeyPipeline: GPUComputePipeline
   // @ts-ignore
   bindGroup: GPUBindGroup
@@ -142,8 +143,6 @@ export class Preprocessor {
 
     this.intersectionOffsetArrayLayout = new StaticArray(u32, this.numTiles)
 
-    console.log('tileDepthKeyLayout', tileDepthKeyLayout)
-
     this.resultBuffer = this.context.device.createBuffer({
       size: this.resultArrayLayout.size,
       usage:
@@ -207,8 +206,6 @@ export class Preprocessor {
       label: 'preprocessor.tileDepthKeyBuffer',
     })
 
-    console.log('this.tileDepthKeyArrayLayout', this.tileDepthKeyArrayLayout)
-
     this.radixSorter = new RadixSort(
       context,
       this.tileDepthKeyArrayLayout.nElements,
@@ -222,20 +219,21 @@ export class Preprocessor {
       bindGroupLayouts: [computeBindGroupLayout],
     })
 
-    let newShader = shader.replace(
-      'const item_per_thread: i32 = 1;',
-      `const item_per_thread: i32 = ${itemsPerThread};`,
-    )
-    newShader = newShader.replace(
-      'const num_quads_unpaddded: i32 = 1;',
-      `const num_quads_unpaddded: i32 = ${this.numGaussians};`,
-    )
+    const gaussShaderWithParams = gaussShader
+      .replace(
+        'const item_per_thread: i32 = 1;',
+        `const item_per_thread: i32 = ${itemsPerThread};`,
+      )
+      .replace(
+        'const num_quads_unpaddded: i32 = 1;',
+        `const num_quads_unpaddded: i32 = ${this.numGaussians};`,
+      )
 
     this.pipeline = this.context.device.createComputePipeline({
       layout: this.pipelineLayout,
       compute: {
         module: this.context.device.createShaderModule({
-          code: newShader,
+          code: gaussShaderWithParams,
         }),
         entryPoint: 'main',
         constants: {
@@ -244,23 +242,33 @@ export class Preprocessor {
       },
     })
 
+    const prefixSumShaderWithParams = prefixSumShader
+      .replace(
+        'const item_per_thread: i32 = 1;',
+        `const item_per_thread: i32 = ${itemsPerThread};`,
+      )
+      .replace(
+        'const num_quads_unpaddded: i32 = 1;',
+        `const num_quads_unpaddded: i32 = ${this.numGaussians};`,
+      )
+
     this.cumSumPipeline = this.context.device.createComputePipeline({
       layout: this.pipelineLayout,
       compute: {
         module: this.context.device.createShaderModule({
-          code: newShader,
+          code: prefixSumShaderWithParams,
         }),
-        entryPoint: 'cumsum_init',
+        entryPoint: 'main',
       },
     })
 
-    this.cumSumFinalPipeline = this.context.device.createComputePipeline({
+    this.cumSumSyncPipeline = this.context.device.createComputePipeline({
       layout: this.pipelineLayout,
       compute: {
         module: this.context.device.createShaderModule({
-          code: newShader,
+          code: prefixSumShaderWithParams,
         }),
-        entryPoint: 'cumsum_sync',
+        entryPoint: 'prefix_sum_sync',
       },
     })
 
@@ -416,26 +424,24 @@ export class Preprocessor {
 
     this.renderer.timestamp(commandEncoder, 'clear')
 
-    const passEncoder = commandEncoder.beginComputePass()
-    passEncoder.setPipeline(this.pipeline)
-    passEncoder.setBindGroup(0, this.bindGroup)
-    passEncoder.dispatchWorkgroups(Math.ceil(this.numGaussians / 256) + 1)
-    // passEncoder.dispatchWorkgroups(this.numThreads)
-    passEncoder.end()
+    const gaussEncoder = commandEncoder.beginComputePass()
+    gaussEncoder.setPipeline(this.pipeline)
+    gaussEncoder.setBindGroup(0, this.bindGroup)
+    gaussEncoder.dispatchWorkgroups(Math.ceil(this.numGaussians / 256) + 1)
+    gaussEncoder.end()
 
-    this.renderer.timestamp(commandEncoder, 'preprocess')
+    this.renderer.timestamp(commandEncoder, 'gauss properties')
 
-    const cumSumPass = commandEncoder.beginComputePass()
-    cumSumPass.setPipeline(this.cumSumPipeline)
-    cumSumPass.setBindGroup(0, this.bindGroup)
-    cumSumPass.dispatchWorkgroups(Math.ceil(this.numGaussians / 256) + 1)
-    // cumSumPass.dispatchWorkgroups(this.numThreads)
-    cumSumPass.end()
+    const prefixSumPass = commandEncoder.beginComputePass()
+    prefixSumPass.setPipeline(this.cumSumPipeline)
+    prefixSumPass.setBindGroup(0, this.bindGroup)
+    prefixSumPass.dispatchWorkgroups(Math.ceil(this.numGaussians / 256) + 1)
+    prefixSumPass.end()
 
     this.renderer.timestamp(commandEncoder, 'prefix sum scan')
 
     const prefixSumSyncPass = commandEncoder.beginComputePass()
-    prefixSumSyncPass.setPipeline(this.cumSumFinalPipeline)
+    prefixSumSyncPass.setPipeline(this.cumSumSyncPipeline)
     prefixSumSyncPass.setBindGroup(0, this.bindGroup)
     prefixSumSyncPass.dispatchWorkgroups(this.numThreads)
     prefixSumSyncPass.end()
