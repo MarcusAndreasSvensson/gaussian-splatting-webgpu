@@ -126,11 +126,10 @@ fn sync(
 
   let bits = bitExtracted(value.key, u_params.bit, u32(num_bits_in_chunk));
 
-  var prev_sum = 0;
-  prev_sum = i32(sum_prev_groups_sum[bits]);
+  let prev_sum = i32(sum_prev_groups_sum[bits]);
 
 
-  let idx_scatter = atomicLoad(&sum_buf[idx_1_local * u32(two_pow_bits) + bits]) + i32(prev_sum);
+  let idx_scatter = atomicLoad(&sum_buf[idx_1_local * u32(two_pow_bits) + bits]) + prev_sum;
 
   b_output[idx_scatter - 1] = value;
 }

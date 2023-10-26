@@ -396,6 +396,14 @@ export class Preprocessor {
   public destroy() {}
 
   async run() {
+    // Debug
+    const intersectionOffsetToRead = this.context.device.createBuffer({
+      size: this.intersectionOffsetArrayLayout.size,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+      mappedAtCreation: false,
+      label: 'preprocessor.intersectionOffsetToRead',
+    })
+
     const commandEncoder = this.context.device.createCommandEncoder()
 
     this.renderer.timestamp(commandEncoder, 'preprocess start')
@@ -437,7 +445,8 @@ export class Preprocessor {
     const tileDepthKeyPassEncoder = commandEncoder.beginComputePass()
     tileDepthKeyPassEncoder.setPipeline(this.tileDepthKeyPipeline)
     tileDepthKeyPassEncoder.setBindGroup(0, this.bindGroup)
-    tileDepthKeyPassEncoder.dispatchWorkgroups(this.numGaussians / 256 + 1)
+    tileDepthKeyPassEncoder.dispatchWorkgroups(this.numTiles)
+    // tileDepthKeyPassEncoder.dispatchWorkgroups(this.numGaussians / 256 + 1)
     tileDepthKeyPassEncoder.end()
 
     this.renderer.timestamp(commandEncoder, 'tile depth key')
@@ -450,7 +459,33 @@ export class Preprocessor {
       auxLayout.size,
     )
 
+    // Debug
+    commandEncoder.copyBufferToBuffer(
+      this.intersectionOffsetBuffer,
+      0,
+      intersectionOffsetToRead,
+      0,
+      this.intersectionOffsetArrayLayout.size,
+    )
+
     this.context.device.queue.submit([commandEncoder.finish()])
+
+    // Debug
+    await intersectionOffsetToRead.mapAsync(
+      GPUMapMode.READ,
+      0,
+      this.intersectionOffsetArrayLayout.size,
+    )
+    const intersectionOffsets = new Uint32Array(
+      intersectionOffsetToRead.getMappedRange(
+        0,
+        this.intersectionOffsetArrayLayout.size,
+      ),
+    )
+
+    console.log('intersectionOffsets', intersectionOffsets)
+
+    // intersectionOffsetToRead.unmap()
 
     await this.auxBufferRead.mapAsync(GPUMapMode.READ, 0, 4)
     this.numIntersections = new Uint32Array(

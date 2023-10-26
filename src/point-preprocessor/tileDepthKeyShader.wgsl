@@ -61,7 +61,6 @@ struct AuxData {
 
 
 @compute @workgroup_size(256)
-// @compute @workgroup_size(1)
 fn main(
   @builtin(global_invocation_id) global_id: vec3<u32>,
   @builtin(local_invocation_id) local_id: vec3<u32>,
@@ -105,8 +104,7 @@ fn main(
     normalized_depth,
     0.0,
     1.0
-  ) * (pow(2.0, 15.0) - 1.0));
-  // ) * (pow(2.0, 16.0) - 1.0));
+  ) * (pow(2.0, 16.0) - 1.0));
 
 
   let rect: vec4<u32> = getRect(

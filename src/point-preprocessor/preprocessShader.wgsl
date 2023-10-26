@@ -119,9 +119,12 @@ fn main(
   let cov_2d = compute_cov2d(point.position, point.log_scale, point.rot);
 
   let det = cov_2d.x * cov_2d.z - cov_2d.y * cov_2d.y;
-  let det_inv = 1.0 / det;
 
-  if (det == 0.0f) {return;}
+  if (det == 0.0f) {
+    return;
+  }
+
+  let det_inv = 1.0 / det;
 
   let conic = vec3<f32>(
     cov_2d.z * det_inv, 
@@ -153,9 +156,7 @@ fn main(
   if ((rect_max.x - rect_min.x) * (rect_max.y - rect_min.y) == 0u) {return;}
   
   let color = compute_color_from_sh(world_pos.xyz, point.sh);
-  // let color = vec3(0.0);
 
-  
   
   var tiles_touched = 0u;
   
