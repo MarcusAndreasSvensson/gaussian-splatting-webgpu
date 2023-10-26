@@ -13,6 +13,7 @@ import { PackedGaussians } from '@/splatting-web/ply'
 import { GpuContext } from '@/point-preprocessor/gpuContext'
 import { Renderer } from '@/splatting-web/renderer'
 import gaussShader from './gauss.wgsl?raw'
+import intersectionOffsetPrefixSumShader from './intersectionOffsetprefixSum.wgsl?raw'
 import prefixSumShader from './prefixSum.wgsl?raw'
 import tileDepthShader from './tileDepthKey.wgsl?raw'
 
@@ -71,9 +72,10 @@ export class Preprocessor {
 
   pipelineLayout: GPUPipelineLayout
   pipeline: GPUComputePipeline
-  cumSumPipeline: GPUComputePipeline
-  cumSumSyncPipeline: GPUComputePipeline
+  prefixSumPipeline: GPUComputePipeline
+  prefixSumSyncPipeline: GPUComputePipeline
   tileDepthKeyPipeline: GPUComputePipeline
+  intersectionOffsetPrefixSumPipeline: GPUComputePipeline
   // @ts-ignore
   bindGroup: GPUBindGroup
 
@@ -242,6 +244,26 @@ export class Preprocessor {
       },
     })
 
+    const intersectionOffsetPrefixSumShaderWithParams =
+      intersectionOffsetPrefixSumShader.replace(
+        'const num_tiles: i32 = 1;',
+        `const num_tiles: i32 = ${this.numTiles};`,
+      )
+
+    this.intersectionOffsetPrefixSumPipeline =
+      this.context.device.createComputePipeline({
+        layout: this.pipelineLayout,
+        compute: {
+          module: this.context.device.createShaderModule({
+            code: intersectionOffsetPrefixSumShaderWithParams,
+          }),
+          entryPoint: 'main',
+          constants: {
+            // num_quads_unpaddded: this.numGaussians,
+          },
+        },
+      })
+
     const prefixSumShaderWithParams = prefixSumShader
       .replace(
         'const item_per_thread: i32 = 1;',
@@ -252,7 +274,7 @@ export class Preprocessor {
         `const num_quads_unpaddded: i32 = ${this.numGaussians};`,
       )
 
-    this.cumSumPipeline = this.context.device.createComputePipeline({
+    this.prefixSumPipeline = this.context.device.createComputePipeline({
       layout: this.pipelineLayout,
       compute: {
         module: this.context.device.createShaderModule({
@@ -262,7 +284,7 @@ export class Preprocessor {
       },
     })
 
-    this.cumSumSyncPipeline = this.context.device.createComputePipeline({
+    this.prefixSumSyncPipeline = this.context.device.createComputePipeline({
       layout: this.pipelineLayout,
       compute: {
         module: this.context.device.createShaderModule({
@@ -404,14 +426,6 @@ export class Preprocessor {
   public destroy() {}
 
   async run() {
-    // Debug
-    const intersectionOffsetToRead = this.context.device.createBuffer({
-      size: this.intersectionOffsetArrayLayout.size,
-      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
-      mappedAtCreation: false,
-      label: 'preprocessor.intersectionOffsetToRead',
-    })
-
     const commandEncoder = this.context.device.createCommandEncoder()
 
     this.renderer.timestamp(commandEncoder, 'preprocess start')
@@ -432,8 +446,18 @@ export class Preprocessor {
 
     this.renderer.timestamp(commandEncoder, 'gauss properties')
 
+    const intersectionOffsetPrefixSumEncoder = commandEncoder.beginComputePass()
+    intersectionOffsetPrefixSumEncoder.setPipeline(
+      this.intersectionOffsetPrefixSumPipeline,
+    )
+    intersectionOffsetPrefixSumEncoder.setBindGroup(0, this.bindGroup)
+    intersectionOffsetPrefixSumEncoder.dispatchWorkgroups(1)
+    intersectionOffsetPrefixSumEncoder.end()
+
+    this.renderer.timestamp(commandEncoder, 'intersection offset prefix sum')
+
     const prefixSumPass = commandEncoder.beginComputePass()
-    prefixSumPass.setPipeline(this.cumSumPipeline)
+    prefixSumPass.setPipeline(this.prefixSumPipeline)
     prefixSumPass.setBindGroup(0, this.bindGroup)
     prefixSumPass.dispatchWorkgroups(Math.ceil(this.numGaussians / 256) + 1)
     prefixSumPass.end()
@@ -441,7 +465,7 @@ export class Preprocessor {
     this.renderer.timestamp(commandEncoder, 'prefix sum scan')
 
     const prefixSumSyncPass = commandEncoder.beginComputePass()
-    prefixSumSyncPass.setPipeline(this.cumSumSyncPipeline)
+    prefixSumSyncPass.setPipeline(this.prefixSumSyncPipeline)
     prefixSumSyncPass.setBindGroup(0, this.bindGroup)
     prefixSumSyncPass.dispatchWorkgroups(this.numThreads)
     prefixSumSyncPass.end()
@@ -465,33 +489,7 @@ export class Preprocessor {
       auxLayout.size,
     )
 
-    // Debug
-    commandEncoder.copyBufferToBuffer(
-      this.intersectionOffsetBuffer,
-      0,
-      intersectionOffsetToRead,
-      0,
-      this.intersectionOffsetArrayLayout.size,
-    )
-
     this.context.device.queue.submit([commandEncoder.finish()])
-
-    // Debug
-    await intersectionOffsetToRead.mapAsync(
-      GPUMapMode.READ,
-      0,
-      this.intersectionOffsetArrayLayout.size,
-    )
-    const intersectionOffsets = new Uint32Array(
-      intersectionOffsetToRead.getMappedRange(
-        0,
-        this.intersectionOffsetArrayLayout.size,
-      ),
-    )
-
-    console.log('intersectionOffsets', intersectionOffsets)
-
-    // intersectionOffsetToRead.unmap()
 
     await this.auxBufferRead.mapAsync(GPUMapMode.READ, 0, 4)
     this.numIntersections = new Uint32Array(

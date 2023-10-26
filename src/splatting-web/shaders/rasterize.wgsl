@@ -93,17 +93,8 @@ fn main(
   let base_offset = u32(intersection_array_length) - auxData.num_intersections;
   
   if(thread_idx == 0) {
-    
-    var start_offset = 0u;
-    var end_offset = 0u;
-
-    for (var i = 0; i <= tile_id; i++) {
-      end_offset += intersection_offsets[i];
-      start_offset = end_offset - intersection_offsets[i];
-    }
-
-    start_offset_shared = i32(start_offset);
-    end_offset_shared = i32(end_offset);
+    start_offset_shared = i32(intersection_offsets[tile_id]);
+    end_offset_shared = i32(intersection_offsets[tile_id + 1]);
   }
 
   var transparency_00 = 1.0;

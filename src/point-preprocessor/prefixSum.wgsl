@@ -2,6 +2,7 @@ const BLOCK_X = 16;
 const BLOCK_Y = 16;
 const num_quads_unpaddded: i32 = 1;
 const item_per_thread: i32 = 1;
+const workgroup_size = 256;
 
 
 struct Uniforms {
@@ -51,8 +52,6 @@ struct TileDepthKey {
 }
 
 
-
-
 @group(0) @binding(0) var<storage, read> points: array<PointInput>;
 @group(0) @binding(1) var<uniform> uniforms: Uniforms;
 @group(0) @binding(2) var<storage, read_write> result: array<GaussData>;
@@ -61,8 +60,6 @@ struct TileDepthKey {
 @group(0) @binding(5) var<storage, read_write> auxData: AuxData;
 @group(0) @binding(6) var<storage, read_write> intersection_offsets: array<atomic<u32>>;
 
-
-const workgroup_size = 256;
 
 @compute @workgroup_size(1)
 fn main(
