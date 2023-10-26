@@ -150,7 +150,7 @@ export class RadixSort {
   buf_data: GPUBuffer
   buf_tmp: GPUBuffer[]
 
-  bits = 32
+  bits = 0
   bitsOffset = 0
   buf_constant_radix_scan: GPUBuffer
 
@@ -437,7 +437,6 @@ export class RadixSort {
         passEncoder.setBindGroup(0, this.bind_group_radix_scan[j]!)
 
         passEncoder.dispatchWorkgroups(numActiveBlocks)
-        // passEncoder.dispatchWorkgroups(numActiveBlocks + 15000)
         passEncoder.end()
         this.renderer.timestamp(commandEncoder, `sync-${i}`)
       }

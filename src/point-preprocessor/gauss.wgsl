@@ -150,19 +150,38 @@ fn main(
   let rect_min = rect.xy;
   let rect_max = rect.zw;
 
-  if ((rect_max.x - rect_min.x) * (rect_max.y - rect_min.y) == 0u) {return;}
+  ///// NEW
+  // let position = point_uv * vec2(f32(uniforms.screen_size.x), f32(uniforms.screen_size.y));
+  // let region_size = radius_px;
+  // // let region_size = sqrt(covariance.xy) * 3.0f;
+  // let group_size = num_tiles;
+  // // let group_size = vec2(GROUP_WIDTH, GROUP_HEIGHT);
+  // let tiles_width = BLOCK_X;
+  // let tiles_height = BLOCK_Y;
+
+  // var min_tile = vec2<i32>(position.xy - f32(region_size)) / i32(group_size);
+  // var max_tile = (vec2<i32>(position.xy + region_size) + group_size - 1) / group_size;
+  // min_tile = clamp(min_tile, vec2(0), vec2(tiles_width, tiles_height));
+  // max_tile = clamp(max_tile, vec2(0), vec2(tiles_width, tiles_height));
+
+  if ((rect_max.x - rect_min.x) * (rect_max.y - rect_min.y) == 0u) {
+    return;
+  }
+  ///// NEW
+
+  // if ((rect_max.x - rect_min.x) * (rect_max.y - rect_min.y) == 0u) {
+  //   return;
+  // }
   
   let color = compute_color_from_sh(world_pos.xyz, point.sh);
 
-  
-  var tiles_touched = 0u;
+  let tiles_touched = (rect_max.y - rect_min.y) * (rect_max.x - rect_min.x);
   
   // get x and y of every tile touched
   for (var y = rect_min.y; y < rect_max.y; y++) {
     for (var x = rect_min.x; x < rect_max.x; x++) {
       let idx = y * num_tiles.x + x;
       atomicAdd(&intersection_offsets[idx], 1u);
-      tiles_touched++;
     }
   }
 

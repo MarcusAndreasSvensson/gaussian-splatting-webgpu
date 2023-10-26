@@ -1,6 +1,7 @@
 const num_gauss_unpaddded: i32 = 1;
 const BLOCK_X = 16;
 const BLOCK_Y = 16;
+const intersection_array_length = 1;
 
 
 struct Uniforms {
@@ -116,18 +117,23 @@ fn main(
   // with this key yields Gaussian IDs in a list, such that they
   // are first sorted by tile and then by depth. 
 
+  let base_offset = u32(intersection_array_length) - auxData.num_intersections;
+  // let base_offset = 0u;
   
-  for (var y: i32 = rect_min.y; y < rect_max.y; y++) {
-    for (var x: i32 = rect_min.x; x < rect_max.x; x++) {
+  for (var y = rect_min.y; y < rect_max.y; y++) {
+    for (var x = rect_min.x; x < rect_max.x; x++) {
 
       let tile_index = u32(x) + u32(y) * num_tiles.x;
       
       let first_16_bits_tile_index = tile_index & 0xFFFFu;
       let first_16_bits_depth = depth_uint & 0xFFFFu;
 
-      let concatenated_value = (first_16_bits_tile_index << 16u) | first_16_bits_depth;
+      // TODO: Fix
+      // let concatenated_value = base_offset;
+      let concatenated_value = first_16_bits_tile_index;
+      // let concatenated_value = (first_16_bits_tile_index << 16u) | first_16_bits_depth;
 
-      let offset = intersection_offsets[tile_index] + atomicAdd(&intersection_offsets_count[tile_index], 1u);
+      let offset = base_offset + intersection_offsets[tile_index] + atomicAdd(&intersection_offsets_count[tile_index], 1u);
 
       keys[offset].key = concatenated_value;
       keys[offset].gauss_id = u32(gaussian.id);
