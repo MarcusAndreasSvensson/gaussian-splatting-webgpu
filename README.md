@@ -26,6 +26,8 @@ Online demo: [https://splatting.marcussvensson.com](https://splatting.marcussven
 
 - Explore the possibility of breaking down the sorting process into two phases. Given the relatively low total number of tiles, consider implementing a more efficient counting sort for tile indexing and subsequently sorting the depth per tile in the second phase. A possible approach might involve [this](https://on-demand.gputechconf.com/gtc/2014/presentations/S4117-fast-fixed-radius-nearest-neighbor-gpu.pdf).
 
+- A potentially superior approach would be to insert the intersections from a tile perpective from the beginning, scattering on the correct indeces, effectively reducing the problem to pure depth sorting per tile.
+
 - A rewrite of the pipeline in a more holistic manner to increase readability and maintainability. 
 
 ## A few words on performance
