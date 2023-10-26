@@ -593,7 +593,8 @@ export class Preprocessor {
 
     console.log('numIntersections', this.numIntersections)
 
-    const { values: sortedValuesRadix } = this.radixSorter.sort(
+    // const { values: sortedValuesRadix } =
+    this.radixSorter.sort(
       this.tileDepthKeyBuffer,
       numTilesArray,
       // this.numIntersections,
@@ -601,16 +602,16 @@ export class Preprocessor {
 
     this.auxBufferRead.unmap()
 
-    return {
-      gaussData: this.resultBuffer,
-      gaussDataLayout: this.resultArrayLayout,
-      intersectionKeys: sortedValuesRadix,
-      // intersectionKeys: this.tileDepthKeyBuffer,
-      intersectionKeysLayout: this.tileDepthKeyArrayLayout,
-      intersectionOffsets: this.intersectionOffsetBuffer,
-      intersectionOffsetsLayout: this.intersectionOffsetArrayLayout,
-      aux: this.auxBuffer,
-      auxLayout,
-    }
+    // return {
+    //   gaussData: this.resultBuffer,
+    //   gaussDataLayout: this.resultArrayLayout,
+    //   intersectionKeys: sortedValuesRadix,
+    //   // intersectionKeys: this.tileDepthKeyBuffer,
+    //   intersectionKeysLayout: this.tileDepthKeyArrayLayout,
+    //   intersectionOffsets: this.intersectionOffsetBuffer,
+    //   intersectionOffsetsLayout: this.intersectionOffsetArrayLayout,
+    //   aux: this.auxBuffer,
+    //   auxLayout,
+    // }
   }
 }

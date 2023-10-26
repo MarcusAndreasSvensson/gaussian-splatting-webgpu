@@ -150,7 +150,9 @@ export class RadixSort {
   buf_data: GPUBuffer
   buf_tmp: GPUBuffer[]
 
-  bits = 16
+  // Needs to be a multiple of 2 * NUM_BITS_IN_CHUNK
+  bits = 0
+  // bits = 8
   bitsOffset = 0
   buf_constant_radix_scan: GPUBuffer
 
@@ -457,6 +459,14 @@ export class RadixSort {
         this.buf_data,
         0,
         this.buf_tmp[j]!.size,
+      )
+
+      commandEncoder.copyBufferToBuffer(
+        this.buf_tmp[0]!,
+        0,
+        hInput,
+        roundedOffset,
+        roundedSize,
       )
 
       this.renderer.timestamp(commandEncoder, 'copy back')

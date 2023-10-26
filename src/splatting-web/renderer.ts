@@ -281,7 +281,7 @@ export class Renderer {
         },
         {
           binding: 3,
-          resource: { buffer: this.preprocessor.radixSorter.buf_data },
+          resource: { buffer: this.preprocessor.tileDepthKeyBuffer },
         },
         {
           binding: 4,
