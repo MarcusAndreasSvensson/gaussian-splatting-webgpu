@@ -54,10 +54,11 @@ struct AuxData {
 @group(0) @binding(0) var<storage, read> points: array<PointInput>;
 @group(0) @binding(1) var<uniform> uniforms: Uniforms;
 @group(0) @binding(2) var<storage, read_write> pre_processed: array<PreProcessedPoint>;
-// Total length is num_gaussian-tile-intersections for each gaussian.
 @group(0) @binding(3) var<storage, read_write> keys: array<TileDepthKey>;
+@group(0) @binding(4) var<storage, read_write> prefixes: array<u32>;
 @group(0) @binding(5) var<storage, read_write> auxData: AuxData;
 @group(0) @binding(6) var<storage, read_write> intersection_offsets: array<u32>;
+@group(0) @binding(7) var<storage, read_write> intersection_offsets_count: array<atomic<u32>>;
 
 
 @compute @workgroup_size(256)
@@ -86,7 +87,7 @@ fn main(
     return;
   }
 
-  let gaussian = pre_processed[i];
+  let gaussian: PreProcessedPoint = pre_processed[i];
 
   if (gaussian.radii == 0) {
     return;
@@ -123,8 +124,7 @@ fn main(
   // with this key yields Gaussian IDs in a list, such that they
   // are first sorted by tile and then by depth. 
 
-  var off = gaussian.cum_tiles_touched;
-
+  
   for (var y: i32 = rect_min.y; y < rect_max.y; y++) {
     for (var x: i32 = rect_min.x; x < rect_max.x; x++) {
 
@@ -135,10 +135,10 @@ fn main(
 
       let concatenated_value = (first_16_bits_tile_index << 16u) | first_16_bits_depth;
 
-      keys[off].key = concatenated_value;
-      keys[off].gauss_id = u32(gaussian.id);
+      let offset = intersection_offsets[tile_index] + atomicAdd(&intersection_offsets_count[tile_index], 1u);
 
-      off++;
+      keys[offset].key = concatenated_value;
+      keys[offset].gauss_id = u32(gaussian.id);
     }
   }
 }

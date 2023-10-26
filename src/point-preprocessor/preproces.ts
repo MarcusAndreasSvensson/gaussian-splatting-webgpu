@@ -14,7 +14,7 @@ import { GpuContext } from '@/point-preprocessor/gpuContext'
 import { Renderer } from '@/splatting-web/renderer'
 import gaussShader from './gauss.wgsl?raw'
 import intersectionOffsetPrefixSumShader from './intersectionOffsetprefixSum.wgsl?raw'
-import prefixSumShader from './prefixSum.wgsl?raw'
+
 import tileDepthShader from './tileDepthKey.wgsl?raw'
 
 function nextPowerOfTwo(x: number): number {
@@ -72,8 +72,7 @@ export class Preprocessor {
 
   pipelineLayout: GPUPipelineLayout
   pipeline: GPUComputePipeline
-  prefixSumPipeline: GPUComputePipeline
-  prefixSumSyncPipeline: GPUComputePipeline
+
   tileDepthKeyPipeline: GPUComputePipeline
   intersectionOffsetPrefixSumPipeline: GPUComputePipeline
   // @ts-ignore
@@ -86,6 +85,7 @@ export class Preprocessor {
   auxBuffer: GPUBuffer
   auxBufferRead: GPUBuffer
   intersectionOffsetBuffer: GPUBuffer
+  intersectionOffsetCountBuffer: GPUBuffer
   emptyPrefixBuffer: GPUBuffer
   prefixBuffer: GPUBuffer
 
@@ -182,6 +182,16 @@ export class Preprocessor {
       label: 'preprocessor.intersectionOffsetBuffer',
     })
 
+    this.intersectionOffsetCountBuffer = this.context.device.createBuffer({
+      size: this.intersectionOffsetArrayLayout.size,
+      usage:
+        GPUBufferUsage.STORAGE |
+        GPUBufferUsage.COPY_SRC |
+        GPUBufferUsage.COPY_DST,
+      mappedAtCreation: false,
+      label: 'preprocessor.intersectionOffsetCountBuffer',
+    })
+
     this.emptyPrefixBuffer = this.context.device.createBuffer({
       size: this.prefixArrayLayout.size,
       usage: GPUBufferUsage.COPY_SRC,
@@ -264,36 +274,6 @@ export class Preprocessor {
         },
       })
 
-    const prefixSumShaderWithParams = prefixSumShader
-      .replace(
-        'const item_per_thread: i32 = 1;',
-        `const item_per_thread: i32 = ${itemsPerThread};`,
-      )
-      .replace(
-        'const num_quads_unpaddded: i32 = 1;',
-        `const num_quads_unpaddded: i32 = ${this.numGaussians};`,
-      )
-
-    this.prefixSumPipeline = this.context.device.createComputePipeline({
-      layout: this.pipelineLayout,
-      compute: {
-        module: this.context.device.createShaderModule({
-          code: prefixSumShaderWithParams,
-        }),
-        entryPoint: 'main',
-      },
-    })
-
-    this.prefixSumSyncPipeline = this.context.device.createComputePipeline({
-      layout: this.pipelineLayout,
-      compute: {
-        module: this.context.device.createShaderModule({
-          code: prefixSumShaderWithParams,
-        }),
-        entryPoint: 'prefix_sum_sync',
-      },
-    })
-
     let newTileDepthShader = tileDepthShader.replace(
       'const item_per_thread: i32 = 1;',
       `const item_per_thread: i32 = ${itemsPerThread};`,
@@ -367,6 +347,13 @@ export class Preprocessor {
             type: 'storage',
           },
         },
+        {
+          binding: 7,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: {
+            type: 'storage',
+          },
+        },
       ],
     })
 
@@ -415,10 +402,14 @@ export class Preprocessor {
             buffer: this.intersectionOffsetBuffer,
           },
         },
+        {
+          binding: 7,
+          resource: {
+            buffer: this.intersectionOffsetCountBuffer,
+          },
+        },
       ],
     })
-
-    console.log('this.resultArrayLayout', this.resultArrayLayout)
 
     return computeBindGroupLayout
   }
@@ -426,6 +417,22 @@ export class Preprocessor {
   public destroy() {}
 
   async run() {
+    // Debug
+    const intersectionOffsetToRead = this.context.device.createBuffer({
+      size: this.intersectionOffsetArrayLayout.size,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+      mappedAtCreation: false,
+      label: 'preprocessor.intersectionOffsetToRead',
+    })
+
+    // Debug
+    const intersectionOffsetCountToRead = this.context.device.createBuffer({
+      size: this.intersectionOffsetArrayLayout.size,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+      mappedAtCreation: false,
+      label: 'preprocessor.intersectionOffsetCountToRead',
+    })
+
     const commandEncoder = this.context.device.createCommandEncoder()
 
     this.renderer.timestamp(commandEncoder, 'preprocess start')
@@ -435,6 +442,7 @@ export class Preprocessor {
     commandEncoder.clearBuffer(this.prefixBuffer)
     commandEncoder.clearBuffer(this.auxBuffer)
     commandEncoder.clearBuffer(this.intersectionOffsetBuffer)
+    commandEncoder.clearBuffer(this.intersectionOffsetCountBuffer)
 
     this.renderer.timestamp(commandEncoder, 'clear')
 
@@ -456,22 +464,6 @@ export class Preprocessor {
 
     this.renderer.timestamp(commandEncoder, 'intersection offset prefix sum')
 
-    const prefixSumPass = commandEncoder.beginComputePass()
-    prefixSumPass.setPipeline(this.prefixSumPipeline)
-    prefixSumPass.setBindGroup(0, this.bindGroup)
-    prefixSumPass.dispatchWorkgroups(Math.ceil(this.numGaussians / 256) + 1)
-    prefixSumPass.end()
-
-    this.renderer.timestamp(commandEncoder, 'prefix sum scan')
-
-    const prefixSumSyncPass = commandEncoder.beginComputePass()
-    prefixSumSyncPass.setPipeline(this.prefixSumSyncPipeline)
-    prefixSumSyncPass.setBindGroup(0, this.bindGroup)
-    prefixSumSyncPass.dispatchWorkgroups(this.numThreads)
-    prefixSumSyncPass.end()
-
-    this.renderer.timestamp(commandEncoder, 'prefix sum sync')
-
     const tileDepthKeyPassEncoder = commandEncoder.beginComputePass()
     tileDepthKeyPassEncoder.setPipeline(this.tileDepthKeyPipeline)
     tileDepthKeyPassEncoder.setBindGroup(0, this.bindGroup)
@@ -489,7 +481,72 @@ export class Preprocessor {
       auxLayout.size,
     )
 
+    // Debug
+    commandEncoder.copyBufferToBuffer(
+      this.intersectionOffsetBuffer,
+      0,
+      intersectionOffsetToRead,
+      0,
+      this.intersectionOffsetArrayLayout.size,
+    )
+
+    // Debug
+    commandEncoder.copyBufferToBuffer(
+      this.intersectionOffsetCountBuffer,
+      0,
+      intersectionOffsetCountToRead,
+      0,
+      this.intersectionOffsetArrayLayout.size,
+    )
+
     this.context.device.queue.submit([commandEncoder.finish()])
+
+    // Debug
+    await intersectionOffsetToRead.mapAsync(
+      GPUMapMode.READ,
+      0,
+      this.intersectionOffsetArrayLayout.size,
+    )
+    const intersectionOffsets = new Uint32Array(
+      intersectionOffsetToRead.getMappedRange(
+        0,
+        this.intersectionOffsetArrayLayout.size,
+      ),
+    )
+    console.log('intersectionOffsets', intersectionOffsets)
+    console.log(
+      'intersectionOffsets',
+      intersectionOffsets.at(-3),
+      intersectionOffsets.at(-2),
+      intersectionOffsets.at(-1),
+    )
+    console.log(
+      'intersectionOffsets',
+      intersectionOffsets.at(-2)! - intersectionOffsets.at(-3)!,
+      intersectionOffsets.at(-1)! - intersectionOffsets.at(-2)!,
+    )
+
+    // intersectionOffsetToRead.unmap()
+
+    // Debug
+    await intersectionOffsetCountToRead.mapAsync(
+      GPUMapMode.READ,
+      0,
+      this.intersectionOffsetArrayLayout.size,
+    )
+    const intersectionOffsetsCount = new Uint32Array(
+      intersectionOffsetCountToRead.getMappedRange(
+        0,
+        this.intersectionOffsetArrayLayout.size,
+      ),
+    )
+    console.log('intersectionOffsetsCount', intersectionOffsetsCount)
+    console.log(
+      'intersectionOffsetsCount',
+      intersectionOffsetsCount.at(-3),
+      intersectionOffsetsCount.at(-2),
+      intersectionOffsetsCount.at(-1),
+    )
 
     await this.auxBufferRead.mapAsync(GPUMapMode.READ, 0, 4)
     this.numIntersections = new Uint32Array(

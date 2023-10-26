@@ -190,16 +190,9 @@ export class RadixSort {
       (this.count + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE,
     )
 
-    console.log('num elemnts with WG padding', this.num_groups_radix_scan * 256)
-    console.log(
-      'num padded elements',
-      this.num_groups_radix_scan * 256 - this.count,
-    )
-
     this.num_groups_scatter = Math.floor(
       (this.count + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE,
     )
-    console.log('this.num_groups_scatter', this.num_groups_scatter)
 
     this.buf_data = engine_ctx.createBuffer0(
       this.count * 4 * numInts,
@@ -226,7 +219,6 @@ export class RadixSort {
       16,
       GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     )
-    console.log('num_groups_radix_scan', this.num_groups_radix_scan)
 
     this.prefix_wg_buffer = engine_ctx.createBuffer0(
       this.num_groups_radix_scan *
@@ -285,8 +277,6 @@ export class RadixSort {
       entries: this.layout_entries_radix_scan,
     })
     engine_ctx.cache.bindGroupLayouts.radixScan = this.bindGroupLayoutRadixScan
-
-    console.log('numInts', numInts)
 
     this.pipeline_radix_scan = GetPipelineRadixScan(
       engine_ctx,
