@@ -17,7 +17,7 @@ import intersectionOffsetPrefixSumShader from './intersectionOffsetprefixSum.wgs
 
 import tileDepthShader from './tileDepthKey.wgsl?raw'
 
-function nextPowerOfTwo(x: number): number {
+function nextPowerOfTwo(x: number) {
   return Math.pow(2, Math.ceil(Math.log2(x)))
 }
 
@@ -25,8 +25,6 @@ const resultLayout = new Struct([
   ['id', i32],
   ['radii', i32],
   ['depth', f32],
-  ['tiles_touched', u32],
-  ['cum_tiles_touched', u32],
   ['uv', new vec2(f32)],
   ['conic', new vec3(f32)],
   ['color', new vec3(f32)],
@@ -231,15 +229,10 @@ export class Preprocessor {
       bindGroupLayouts: [computeBindGroupLayout],
     })
 
-    const gaussShaderWithParams = gaussShader
-      .replace(
-        'const item_per_thread: i32 = 1;',
-        `const item_per_thread: i32 = ${itemsPerThread};`,
-      )
-      .replace(
-        'const num_quads_unpaddded: i32 = 1;',
-        `const num_quads_unpaddded: i32 = ${this.numGaussians};`,
-      )
+    const gaussShaderWithParams = gaussShader.replace(
+      'const num_gauss_unpaddded: i32 = 1;',
+      `const num_gauss_unpaddded: i32 = ${this.numGaussians};`,
+    )
 
     this.pipeline = this.context.device.createComputePipeline({
       layout: this.pipelineLayout,
@@ -249,7 +242,7 @@ export class Preprocessor {
         }),
         entryPoint: 'main',
         constants: {
-          // num_quads_unpaddded: this.numGaussians,
+          // num_gauss_unpaddded: this.numGaussians,
         },
       },
     })
@@ -269,25 +262,21 @@ export class Preprocessor {
           }),
           entryPoint: 'main',
           constants: {
-            // num_quads_unpaddded: this.numGaussians,
+            // num_gauss_unpaddded: this.numGaussians,
           },
         },
       })
 
-    let newTileDepthShader = tileDepthShader.replace(
-      'const item_per_thread: i32 = 1;',
-      `const item_per_thread: i32 = ${itemsPerThread};`,
-    )
-    newTileDepthShader = newTileDepthShader.replace(
-      'const num_quads_unpaddded: i32 = 1;',
-      `const num_quads_unpaddded: i32 = ${this.numGaussians};`,
+    const tileDepthShaderWithParams = tileDepthShader.replace(
+      'const num_gauss_unpaddded: i32 = 1;',
+      `const num_gauss_unpaddded: i32 = ${this.numGaussians};`,
     )
 
     this.tileDepthKeyPipeline = this.context.device.createComputePipeline({
       layout: this.pipelineLayout,
       compute: {
         module: this.context.device.createShaderModule({
-          code: newTileDepthShader,
+          code: tileDepthShaderWithParams,
         }),
         entryPoint: 'main',
       },

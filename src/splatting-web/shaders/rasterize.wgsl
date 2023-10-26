@@ -9,8 +9,6 @@ struct GaussData {
   id: i32,
   radii: i32,  // Also signals whether this Gaussian is in frustum.
   depth: f32,
-  tiles_touched: u32,
-  cum_tiles_touched: u32,
   uv: vec2<f32>,
   conic: vec3<f32>,
   color: vec3<f32>,

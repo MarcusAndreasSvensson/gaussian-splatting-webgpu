@@ -1,5 +1,4 @@
-const item_per_thread: i32 = 1;
-const num_quads_unpaddded: i32 = 1;
+const num_gauss_unpaddded: i32 = 1;
 const BLOCK_X = 16;
 const BLOCK_Y = 16;
 
@@ -30,8 +29,6 @@ struct PreProcessedPoint {
   id: i32,
   radii: i32,  // Also signals whether this Gaussian is in frustum.
   depth: f32,
-  tiles_touched: u32,
-  cum_tiles_touched: u32,
   uv: vec2<f32>,
   conic: vec3<f32>,
   color: vec3<f32>,
@@ -73,21 +70,16 @@ fn main(
   let block_idx = i32(workgroup_id.x);
   let workgroup_size = 256;
 
-  let idx_global = thread_idx + block_idx * workgroup_size;
+  let idx_global = i32(global_id.x);
 
-  if (idx_global >= num_quads_unpaddded) {
+  if (idx_global >= num_gauss_unpaddded) {
     return;
   }
 
   let num_tiles: vec2<u32> = uniforms.screen_size / vec2(16u);
 
-  let i = idx_global;
 
-  if(i >= num_quads_unpaddded) {
-    return;
-  }
-
-  let gaussian: PreProcessedPoint = pre_processed[i];
+  let gaussian: PreProcessedPoint = pre_processed[idx_global];
 
   if (gaussian.radii == 0) {
     return;
@@ -99,7 +91,7 @@ fn main(
   let max_depth = auxData.max_depth;
 
   // let normalized_depth = ((pre_processed[i].depth) - f32(min_depth)) / f32(max_depth - min_depth);
-  let normalized_depth = ((pre_processed[i].depth * 1000000.0) - f32(min_depth)) / f32(max_depth - min_depth);
+  let normalized_depth = ((gaussian.depth * 1000000.0) - f32(min_depth)) / f32(max_depth - min_depth);
 
   let depth_uint = u32(clamp(
     normalized_depth,
@@ -139,6 +131,7 @@ fn main(
 
       keys[offset].key = concatenated_value;
       keys[offset].gauss_id = u32(gaussian.id);
+
     }
   }
 }

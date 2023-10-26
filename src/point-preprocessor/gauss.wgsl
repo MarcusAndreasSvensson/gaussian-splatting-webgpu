@@ -1,7 +1,6 @@
 const BLOCK_X = 16;
 const BLOCK_Y = 16;
-const num_quads_unpaddded: i32 = 1;
-const item_per_thread: i32 = 1;
+const num_gauss_unpaddded: i32 = 1;
 
 
 struct Uniforms {
@@ -37,8 +36,6 @@ struct GaussData {
   id: i32,
   radii: i32,  // Also signals whether this Gaussian is in frustum.
   depth: f32,
-  tiles_touched: u32,
-  cum_tiles_touched: u32,
   uv: vec2<f32>,
   conic: vec3<f32>,
   color: vec3<f32>,
@@ -81,7 +78,7 @@ fn main(
   let i = thread_idx + block_idx * 256;
 
 
-  if(i >= num_quads_unpaddded) {
+  if(i >= num_gauss_unpaddded) {
     return;
   }
 
@@ -175,8 +172,6 @@ fn main(
     i,
     radius_px,
     clip_pos.z,
-    tiles_touched,
-    0u,
     point_uv,
     conic,
     color,
