@@ -151,8 +151,7 @@ export class RadixSort {
   buf_tmp: GPUBuffer[]
 
   // Needs to be a multiple of 2 * NUM_BITS_IN_CHUNK
-  bits = 0
-  // bits = 8
+  bits = 16
   bitsOffset = 0
   buf_constant_radix_scan: GPUBuffer
 
@@ -428,7 +427,7 @@ export class RadixSort {
         passEncoder.setPipeline(this.pipeline_wg_scan)
         passEncoder.setBindGroup(0, this.bind_group_radix_scan[j]!)
 
-        passEncoder.dispatchWorkgroups(1, 1, 1)
+        passEncoder.dispatchWorkgroups(1)
         passEncoder.end()
         this.renderer.timestamp(commandEncoder, `wg-sum-${i}`)
       }

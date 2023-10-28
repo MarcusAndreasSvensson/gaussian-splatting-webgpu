@@ -1,3 +1,4 @@
+import { sortExample } from '@/bitonic-sort/demo'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -242,6 +243,13 @@ export default function Canvas({ children }: CanvasProps) {
             <li>Z/X: Down / Up</li>
           </ul>
         </div>
+        <Button
+          onClick={() => {
+            sortExample()
+          }}
+        >
+          sort
+        </Button>
       </div>
 
       <label

@@ -73,7 +73,7 @@ export class Renderer {
 
   preprocessor: Preprocessor
 
-  numTimestamps = 40
+  numTimestamps = 10
   currentTimeStamp = 0
   timeStampQuerySet: GPUQuerySet | null = null
   timeStampBuffer: GPUBuffer

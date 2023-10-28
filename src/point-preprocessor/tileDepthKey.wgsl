@@ -128,8 +128,10 @@ fn main(
       let first_16_bits_tile_index = tile_index & 0xFFFFu;
       let first_16_bits_depth = depth_uint & 0xFFFFu;
 
+      // let concatenated_value = local_id.x;
       // let concatenated_value = first_16_bits_tile_index;
-      let concatenated_value = (first_16_bits_tile_index << 16u) | first_16_bits_depth;
+      let concatenated_value = first_16_bits_depth;
+      // let concatenated_value = (first_16_bits_tile_index << 16u) | first_16_bits_depth;
 
       let offset = base_offset + intersection_offsets[tile_index] + atomicAdd(&intersection_offsets_count[tile_index], 1u);
 
