@@ -1,6 +1,9 @@
 const workgroup_size = 256u;
-const inputs_per_thread = 8u;
-const shared_memory_size = 2048u;
+const number_per_thread = 1u;
+const shared_memory_size = 512u;
+// const shared_memory_size = 1024u;
+// const number_per_thread = 4u;
+// const shared_memory_size = 2048u;
 
 struct Uniform {
   data: vec4<u32> 
@@ -33,13 +36,8 @@ fn main(
   let input_offset = base_offset + offset_buffer[ group_id.x ];
   let input_count = offset_buffer_count[ group_id.x ];
 
-
-  for ( var i: u32 = 0u; i < inputs_per_thread; i++ ) {
-    let idx = local_idx * inputs_per_thread + i;
-
-    if ( idx < input_count) {
-      sharedData[ idx ] = input_data[ input_offset + idx ];
-    }
+  if ( local_idx < input_count) {
+    sharedData[ local_idx ] = input_data[ input_offset + local_idx ];
   }
 
   workgroupBarrier();
@@ -77,14 +75,9 @@ fn main(
     }
   }
 
-  let output_offset = workgroup_size - input_count;
-  
-  for ( var i: u32 = 0u; i < inputs_per_thread; i++) {
-    let idx = local_idx * inputs_per_thread + i;
+  if ( local_idx < input_count ) {
+    let output_offset = workgroup_size - input_count;
 
-    if ( idx < input_count ) {
-      input_data[ input_offset + idx ] = sharedData[ output_offset + idx ];
-    }
+    input_data[ input_offset + local_idx ] = sharedData[ output_offset + local_idx ];
   }
-
 }

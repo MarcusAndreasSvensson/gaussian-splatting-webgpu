@@ -649,7 +649,10 @@ export class Preprocessor {
     //   // this.numIntersections,
     // )
 
-    await this.bitonicTileSorter.sort(this.numIntersections)
+    await this.bitonicTileSorter.sort(
+      this.numIntersections,
+      intersectionOffsetsCount,
+    )
 
     {
       const commandEncoder = this.context.device.createCommandEncoder()
@@ -685,7 +688,8 @@ export class Preprocessor {
         const count = intersectionOffsetsCount[i]!
         const offset = intersectionOffsets[i]!
 
-        if (count < 256) {
+        if (count < 2 ** 9 && count > 2 ** 8) {
+          // if (count < 256) {
           console.log('count', i, count, offset)
 
           const tile = tileDepthKeySorted.slice(
@@ -705,6 +709,7 @@ export class Preprocessor {
 
             if (key! < prevKey!) {
               mistakes++
+              // console.log('mistake', i, prevKey, key)
             }
           }
 

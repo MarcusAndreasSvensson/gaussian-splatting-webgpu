@@ -200,9 +200,22 @@ export class BitonicTileSorter {
             type: 'uniform',
           },
         },
-
         {
           binding: 1,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: {
+            type: 'storage',
+          },
+        },
+        {
+          binding: 2,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: {
+            type: 'storage',
+          },
+        },
+        {
+          binding: 3,
           visibility: GPUShaderStage.COMPUTE,
           buffer: {
             type: 'storage',
@@ -240,7 +253,19 @@ export class BitonicTileSorter {
         {
           binding: 1,
           resource: {
-            buffer: this.inputTempBuffer,
+            buffer: this.input,
+          },
+        },
+        {
+          binding: 2,
+          resource: {
+            buffer: this.intersectionOffsetBuffer,
+          },
+        },
+        {
+          binding: 3,
+          resource: {
+            buffer: this.intersectionOffsetCountBuffer,
           },
         },
       ],
@@ -261,74 +286,15 @@ export class BitonicTileSorter {
     return { adapter, device }
   }
 
-  public async validate() {
-    console.log('Length', this.input.size / 4)
+  public async sort(
+    numIntersections: number,
+    intersectionOffsetCounts: Uint32Array,
+  ) {
+    const length = 2 ** 9
+    // const length = this.input.size / 4 / 2
 
-    console.time('GPU')
-    await this.sort(0)
-    console.timeEnd('GPU')
+    console.log('intersectionOffsetCounts', intersectionOffsetCounts)
 
-    {
-      const resultBufferToRead = this.device.createBuffer({
-        size: this.input.size,
-        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
-      })
-
-      const commandEncoder = this.device.createCommandEncoder()
-
-      // Copy the result to a buffer readable by the CPU.
-      commandEncoder.copyBufferToBuffer(
-        this.input,
-        0,
-        resultBufferToRead,
-        0,
-        this.input.size,
-      )
-
-      this.device.queue.submit([commandEncoder.finish()])
-
-      await resultBufferToRead.mapAsync(GPUMapMode.READ)
-      const result = new Uint32Array(resultBufferToRead.getMappedRange())
-      console.log('GPU', result)
-      // resultBufferToRead.unmap()
-    }
-
-    // const length = result.data.length
-
-    // for (let i = 0; i < length; i++) {
-    //   if (i !== length - 1 && result.data[i]! > result.data[i + 1]!) {
-    //     console.error(
-    //       'validation error:',
-    //       i,
-    //       result.data[i],
-    //       result.data[i + 1],
-    //     )
-
-    //     return false
-    //   }
-    // }
-
-    // const cpuDataWithIndices = Array.from(this.inputDataBuffer)
-
-    // console.time('CPU')
-    // const sortedCpuDataWithIndices = cpuDataWithIndices.sort()
-    // console.timeEnd('CPU')
-
-    // console.log('CPU', sortedCpuDataWithIndices)
-
-    // for (let i = 0; i < sortedCpuDataWithIndices.length; i++) {
-    //   // const cpuData = sortedCpuDataWithIndices[i]![0]!
-    //   // const gpuData = result.data[i]
-    //   // if (cpuData !== gpuData) {
-    //   //   console.error('validation error:', i, cpuData, gpuData)
-    //   //   return false
-    //   // }
-    // }
-
-    return true
-  }
-
-  public async sort(numIntersections: number) {
     console.log('numIntersections sort', numIntersections)
 
     // // Debug
@@ -339,26 +305,21 @@ export class BitonicTileSorter {
 
     const threadgroupsPerGrid = Math.max(1, this.tileSize / this.maxThreadNum)
 
-    console.log('threadgroupsPerGrid', threadgroupsPerGrid)
+    console.log('this.maxThreadNum', this.maxThreadNum)
 
-    const offset = Math.log2(length) - Math.log2(this.maxThreadNum * 2 + 1)
-
-    const commandEncoder = this.device.createCommandEncoder()
+    const offset = Math.max(
+      0,
+      Math.log2(length) - Math.log2(this.maxThreadNum * 2 + 1),
+    )
 
     console.log('this.input', this.input.size)
     console.log('this.inputTempBuffer', this.inputTempBuffer.size)
 
-    // // Copy the input data to the GPU.
-    // commandEncoder.copyBufferToBuffer(
-    //   this.input,
-    //   this.input.size - this.inputTempBuffer.size,
-    //   // 0,
-    //   this.inputTempBuffer,
-    //   0,
-    //   this.inputTempBuffer.size,
-    // )
-
     console.log('this.input.size / 4 / 2', this.input.size / 4 / 2)
+
+    const commandEncoder = this.device.createCommandEncoder()
+
+    // Shared memory
 
     this.uniform[0] = this.input.size / 4 / 2 - numIntersections
     // this.uniform[1] =
@@ -374,17 +335,38 @@ export class BitonicTileSorter {
 
     this.device.queue.submit([commandEncoder.finish()])
 
-    // if (threadgroupsPerGrid > 1) {
-    // for (let k = threadgroupsPerGrid >> offset; k <= length; k = k << 1) {
-    //   for (let j = k >> 1; j > 0; j = j >> 1) {
+    // Shared memory
+
+    console.log('offset', offset)
+    console.log('threadgroupsPerGrid', threadgroupsPerGrid)
+    console.log('length', length)
+
+    // const indices = []
+
+    // // if (threadgroupsPerGrid > 1) {
+    // for (
+    //   let subArraySize = threadgroupsPerGrid >> offset;
+    //   subArraySize <= length;
+    //   subArraySize = subArraySize << 1
+    // ) {
+    //   indices.push({ subArraySize, compareDist: [] as number[] })
+
+    //   for (
+    //     let compareDist = subArraySize >> 1;
+    //     compareDist > 0;
+    //     compareDist = compareDist >> 1
+    //   ) {
+    //     indices[indices.length - 1]!.compareDist.push(compareDist)
+
     //     const commandEncoder = this.device.createCommandEncoder()
     //     const passEncoder = commandEncoder.beginComputePass()
 
     //     passEncoder.setPipeline(this.pipeline2)
     //     passEncoder.setBindGroup(0, this.bindGroup2)
 
-    //     this.uniform[0] = k
-    //     this.uniform[1] = j
+    //     this.uniform[0] = subArraySize
+    //     this.uniform[1] = compareDist
+    //     this.uniform[2] = this.input.size / 4 / 2 - numIntersections
 
     //     this.device.queue.writeBuffer(this.uniformBuffer, 0, this.uniform)
 
@@ -400,6 +382,9 @@ export class BitonicTileSorter {
     //     this.device.queue.submit([commandEncoder.finish()])
     //   }
     // }
+
+    // console.log('indices', indices)
+
     // }
 
     {
