@@ -1,7 +1,6 @@
 const workgroup_size = 256u;
 const inputs_per_thread = 8u;
 const shared_memory_size = 2048u;
-
 struct Uniform {
   data: vec4<u32> 
 };
@@ -26,6 +25,7 @@ fn main(
     @builtin(global_invocation_id) global_id: vec3<u32>,
     @builtin(workgroup_id) group_id: vec3<u32>,
 ) {
+  
   let local_idx = local_id.x;
   let global_idx = global_id.x;
 
@@ -45,45 +45,52 @@ fn main(
   workgroupBarrier();
   storageBarrier();
 
-  let offset: u32 = group_id.x * workgroup_size;
 
   var tmp: KeyValue;
 
-  for ( var k: u32 = 2u; k <= workgroup_size; k = k << 1u ) {
-    for ( var j: u32 = k >> 1u; j > 0u; j = j >> 1u ) {
 
-      let ixj: u32 = ( global_idx ^ j ) - offset;
+  for ( var sub_array_size: u32 = 2u; sub_array_size <= shared_memory_size; sub_array_size = sub_array_size << 1u ) {
+    for ( var compare_dist: u32 = sub_array_size >> 1u; compare_dist > 0u; compare_dist = compare_dist >> 1u ) {
 
-      if ( ixj > local_idx ) {
+      for (var i: u32 = 0u; i < inputs_per_thread; i++) {
+        let local_idx_i = local_idx * inputs_per_thread + i;
+        let ixj: u32 =  (local_idx_i) ^ compare_dist;
 
-        if ( ( local_idx & k ) == 0u ) {
-          if ( sharedData[ local_idx ].key > sharedData[ ixj ].key ) {
-            tmp = sharedData[ local_idx ];
-            sharedData[ local_idx ] = sharedData[ ixj ];
-            sharedData[ ixj ] = tmp;
+        if ( ixj > local_idx_i ) {
+
+          if ( ( local_idx_i & sub_array_size ) == 0u ) {
+            if ( sharedData[ local_idx_i ].key > sharedData[ ixj ].key ) {
+              tmp = sharedData[ local_idx_i ];
+              sharedData[ local_idx_i ] = sharedData[ ixj ];
+              sharedData[ ixj ] = tmp;
+            }
+          } else {
+            if ( sharedData[ local_idx_i ].key < sharedData[ ixj ].key ) {
+              tmp = sharedData[ local_idx_i ];
+              sharedData[ local_idx_i ] = sharedData[ ixj ];
+              sharedData[ ixj ] = tmp;
+            }
           }
-        } else {
-          if ( sharedData[ local_idx ].key < sharedData[ ixj ].key ) {
-            tmp = sharedData[ local_idx ];
-            sharedData[ local_idx ] = sharedData[ ixj ];
-            sharedData[ ixj ] = tmp;
-          }
+          
         }
-        
+
+        workgroupBarrier();
+        storageBarrier();  
       }
 
-      workgroupBarrier();
-      storageBarrier();   
     }
   }
 
-  let output_offset = workgroup_size - input_count;
+
+  let output_offset = shared_memory_size - input_count;
   
-  for ( var i: u32 = 0u; i < inputs_per_thread; i++) {
+
+  for (var i: u32 = 0u; i < inputs_per_thread; i++) {
     let idx = local_idx * inputs_per_thread + i;
 
-    if ( idx < input_count ) {
-      input_data[ input_offset + idx ] = sharedData[ output_offset + idx ];
+
+    if (idx < input_count) {
+        input_data[input_offset + idx] = sharedData[output_offset + idx];
     }
   }
 

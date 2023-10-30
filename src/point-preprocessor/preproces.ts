@@ -596,11 +596,14 @@ export class Preprocessor {
       // tileDepthKeyToRead.getMappedRange(0, this.tileDepthKeyArrayLayout.size),
     )
 
+    const condition = (count: number) => count < 2 ** 9 && count > 2 ** 8
+
     for (let i = 0; i < intersectionOffsetsCount.length; i++) {
       const count = intersectionOffsetsCount[i]!
       const offset = intersectionOffsets[i]!
 
-      if (count < 256) {
+      if (condition(count)) {
+        // if (count < 256) {
         console.log('count', i, count, offset)
 
         const tile = tileDepthKey.slice(offset * 2, (offset + count) * 2 + 2)
@@ -688,7 +691,7 @@ export class Preprocessor {
         const count = intersectionOffsetsCount[i]!
         const offset = intersectionOffsets[i]!
 
-        if (count < 2 ** 9 && count > 2 ** 8) {
+        if (condition(count)) {
           // if (count < 256) {
           console.log('count', i, count, offset)
 
