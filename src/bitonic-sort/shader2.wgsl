@@ -1,3 +1,7 @@
+const sorting_threshold = 2048u;
+const workgroup_size = 256u;
+// const sorting_threshold = 4096u;
+
 struct Uniform {
   data: vec4<u32> 
 };
@@ -14,21 +18,60 @@ struct KeyValue {
 
 @compute @workgroup_size(256)
 fn main( 
-    @builtin(global_invocation_id) global_id: vec3<u32>
+    @builtin(global_invocation_id) global_id: vec3<u32>,
+    @builtin(workgroup_id) group_id: vec3<u32>,
+    @builtin(num_workgroups) num_groups: vec3<u32>,
+    @builtin(local_invocation_id) local_id: vec3<u32>,
 ) {
-  let global_idx = global_id.x;
-
-  let base_offset = u_params.data[2];
-  let input_offset = base_offset;
-  // let input_offset = base_offset + offset_buffer[ group_id.x ];
+  // let group_id_flat = group_id.x * num_groups.y + group_id.y;
+  let group_id_flat = group_id.x + group_id.y * num_groups.x;
+  
+  let input_count = offset_buffer_count[ group_id_flat ];
   // let input_count = offset_buffer_count[ group_id.x ];
 
+  if (input_count < sorting_threshold) {
+    return;
+  }
+
+  let group_depth_offset = group_id.z * workgroup_size;
+
+  if (group_depth_offset + local_id.x >= input_count) {
+    return;
+  }
+
+  let base_offset = u_params.data[0];
+  let input_offset = base_offset + offset_buffer[ group_id_flat ];
+
+  // let input_offset = base_offset + offset_buffer[ group_id.x ];
+
+
+  let global_idx = input_offset + group_depth_offset + local_id.x;
+
+  // input[ global_idx ] = KeyValue( 0u, 0u );
+
   var tmp: KeyValue;
-  let ixj: u32 = global_idx ^ u_params.data.y;
+  let ixj: u32 = global_idx ^ u_params.data[2];
 
-  if ( ixj > global_idx ) {
+  // let i = index & (size - 1u);
+  // let j = index ^ stride;
 
-    if ( ( global_idx & u_params.data.x ) == 0u ) {
+
+  // if ( ixj > global_idx ) {
+  // if ( ixj > global_idx && ixj < input_offset + input_count ) {
+  if (ixj > global_idx && 
+    global_idx < input_offset + input_count && 
+    ixj < input_offset + input_count) {
+  // if (j > index && index < length && j < length) {
+
+    
+
+    if ( ( global_idx & u_params.data[1] ) == 0u ) {
+    // if ( ( global_idx & u_params.data[1] ) == 0u && ixj < input_offset + input_count  ) {
+
+      // if(ixj < input_offset + input_count) {
+        
+      // }
+
 
       if ( input[ global_idx ].key > input[ ixj ].key ) {
         tmp = input[ global_idx ];

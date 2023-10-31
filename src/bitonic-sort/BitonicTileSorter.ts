@@ -26,6 +26,8 @@ export class BitonicTileSorter {
   dispatchIndirectOffset: number
 
   numTiles: number
+  numTilesX: number
+  numTilesY: number
   tileSize: number
 
   renderer: Renderer
@@ -36,7 +38,8 @@ export class BitonicTileSorter {
     adapter: GPUAdapter,
     device: GPUDevice,
     input: GPUBuffer,
-    numTiles: number,
+    numTilesX: number,
+    numTilesY: number,
     tileSize: number,
     renderer: Renderer,
     intersectionOffsetBuffer: GPUBuffer,
@@ -49,7 +52,9 @@ export class BitonicTileSorter {
     this.adapter = adapter
     this.device = device
     this.renderer = renderer
-    this.numTiles = numTiles
+    this.numTiles = numTilesX * numTilesY
+    this.numTilesX = numTilesX
+    this.numTilesY = numTilesY
     this.input = input
     this.tileSize = tileSize
 
@@ -288,12 +293,12 @@ export class BitonicTileSorter {
 
   public async sort(
     numIntersections: number,
-    intersectionOffsetCounts: Uint32Array,
+    // intersectionOffsetCounts: Uint32Array,
   ) {
     const length = 2 ** 9
     // const length = this.input.size / 4 / 2
 
-    console.log('intersectionOffsetCounts', intersectionOffsetCounts)
+    // console.log('intersectionOffsetCounts', intersectionOffsetCounts)
 
     console.log('numIntersections sort', numIntersections)
 
@@ -319,6 +324,8 @@ export class BitonicTileSorter {
 
     const commandEncoder = this.device.createCommandEncoder()
 
+    this.renderer.timestamp(commandEncoder, 'before bitonic tile sort')
+
     // Shared memory
 
     this.uniform[0] = this.input.size / 4 / 2 - numIntersections
@@ -333,6 +340,8 @@ export class BitonicTileSorter {
     // passEncoder.dispatchWorkgroupsIndirect(threadgroupsPerGrid)
     passEncoder.end()
 
+    this.renderer.timestamp(commandEncoder, 'bitonic tile sort')
+
     this.device.queue.submit([commandEncoder.finish()])
 
     // Shared memory
@@ -343,88 +352,136 @@ export class BitonicTileSorter {
 
     // const indices = []
 
+    // 16384
+    const workgroupSize = 256
+    const tileWorkgroupDepth = 2 ** 6
+
+    const workgroupDimensions = this.device.createBuffer({
+      size: 4 * 6,
+      usage: GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST,
+    })
+    const uint32 = new Uint32Array(6)
+
+    uint32[0] = this.numTiles
+    uint32[1] = 1
+    uint32[2] = 1
+    uint32[3] = this.numTiles
+    uint32[4] = 1
+    uint32[5] = 1
+
+    this.device.queue.writeBuffer(
+      workgroupDimensions,
+      0,
+      uint32,
+      0,
+      uint32.length,
+    )
+
+    console.log('numTilesX', this.numTilesX)
+    console.log('numTilesY', this.numTilesY)
+    console.log('tileWorkgroupDepth', tileWorkgroupDepth)
+
     // // if (threadgroupsPerGrid > 1) {
-    // for (
-    //   let subArraySize = threadgroupsPerGrid >> offset;
-    //   subArraySize <= length;
-    //   subArraySize = subArraySize << 1
-    // ) {
-    //   indices.push({ subArraySize, compareDist: [] as number[] })
+    for (
+      let subArraySize = 2;
+      // let subArraySize = threadgroupsPerGrid >> offset;
+      subArraySize <= workgroupSize * tileWorkgroupDepth;
+      subArraySize = subArraySize << 1
+    ) {
+      //   indices.push({ subArraySize, compareDist: [] as number[] })
 
-    //   for (
-    //     let compareDist = subArraySize >> 1;
-    //     compareDist > 0;
-    //     compareDist = compareDist >> 1
-    //   ) {
-    //     indices[indices.length - 1]!.compareDist.push(compareDist)
+      for (
+        let compareDist = subArraySize >> 1;
+        compareDist > 0;
+        compareDist = compareDist >> 1
+      ) {
+        //     indices[indices.length - 1]!.compareDist.push(compareDist)
 
-    //     const commandEncoder = this.device.createCommandEncoder()
-    //     const passEncoder = commandEncoder.beginComputePass()
+        const commandEncoder = this.device.createCommandEncoder()
+        // this.renderer.timestamp(
+        //   commandEncoder,
+        //   'bitonic global tile sort before',
+        // )
 
-    //     passEncoder.setPipeline(this.pipeline2)
-    //     passEncoder.setBindGroup(0, this.bindGroup2)
+        const passEncoder = commandEncoder.beginComputePass()
 
-    //     this.uniform[0] = subArraySize
-    //     this.uniform[1] = compareDist
-    //     this.uniform[2] = this.input.size / 4 / 2 - numIntersections
+        passEncoder.setPipeline(this.pipeline2)
+        passEncoder.setBindGroup(0, this.bindGroup2)
 
-    //     this.device.queue.writeBuffer(this.uniformBuffer, 0, this.uniform)
+        // this.uniform[0] = this.input.size / 4 / 2 - numIntersections
+        this.uniform[1] = subArraySize
+        this.uniform[2] = compareDist
 
-    //     // for (let i = 0; i < this.numTiles; i++) {}
+        this.device.queue.writeBuffer(this.uniformBuffer, 0, this.uniform)
 
-    //     // passEncoder.dispatchWorkgroupsIndirect(
-    //     //   this.dispatchIndirectBuffer,
-    //     //   0,
-    //     // )
-    //     passEncoder.dispatchWorkgroups(threadgroupsPerGrid)
-    //     passEncoder.end()
+        // for (let i = 0; i < this.numTiles; i++) {}
 
-    //     this.device.queue.submit([commandEncoder.finish()])
-    //   }
-    // }
+        // passEncoder.dispatchWorkgroupsIndirect(
+        //   this.dispatchIndirectBuffer,
+        //   0,
+        // )
 
-    // console.log('indices', indices)
+        // passEncoder.dispatchWorkgroupsIndirect(workgroupDimensions, 0)
+        // passEncoder.dispatchWorkgroups(2 ** 15, 2 ** 4)
+        passEncoder.dispatchWorkgroups(
+          this.numTilesX,
+          this.numTilesY,
+          tileWorkgroupDepth,
+        )
+        // passEncoder.dispatchWorkgroups(this.numTiles * multiplier)
+        // passEncoder.dispatchWorkgroups(threadgroupsPerGrid)
+        passEncoder.end()
 
-    // }
+        this.renderer.timestamp(
+          commandEncoder,
+          `bitonic global tile sort pass [${subArraySize}, ${compareDist}]`,
+        )
 
-    {
-      const commandEncoder = this.device.createCommandEncoder()
+        this.device.queue.submit([commandEncoder.finish()])
+        //   }
+      }
 
-      // // Copy data back to the original buffer.
-      // commandEncoder.copyBufferToBuffer(
-      //   this.inputTempBuffer,
-      //   0,
-      //   this.input,
-      //   this.input.size - this.inputTempBuffer.size,
-      //   this.inputTempBuffer.size,
-      // )
-
-      this.renderer.timestamp(commandEncoder, 'bitonic tile sort')
-
-      // // Debug
-      // commandEncoder.copyBufferToBuffer(
-      //   this.inputTempBuffer,
-      //   0,
-      //   resultBufferToRead,
-      //   0,
-      //   this.inputTempBuffer.size,
-      // )
-
-      this.device.queue.submit([commandEncoder.finish()])
-
-      // // Debug
-      // await resultBufferToRead.mapAsync(GPUMapMode.READ)
-      // const result = new Uint32Array(resultBufferToRead.getMappedRange())
-      // console.log('GPU', result)
-
-      // let mistakes = 0
-      // for (let i = 0; i < result.length; i++) {
-      //   if (i !== result.length - 1 && result[i]! > result[i + 1]!) {
-      //     mistakes++
-      //   }
-      // }
-      // console.log('mistakes', mistakes)
+      // console.log('indices', indices)
+      // this.renderer.timestamp(commandEncoder, 'bitonic tile sort')
     }
+
+    // Debug
+    // {
+    //   const commandEncoder = this.device.createCommandEncoder()
+
+    //   // Copy data back to the original buffer.
+    //   commandEncoder.copyBufferToBuffer(
+    //     this.inputTempBuffer,
+    //     0,
+    //     this.input,
+    //     this.input.size - this.inputTempBuffer.size,
+    //     this.inputTempBuffer.size,
+    //   )
+
+    //   // Debug
+    //   commandEncoder.copyBufferToBuffer(
+    //     this.inputTempBuffer,
+    //     0,
+    //     resultBufferToRead,
+    //     0,
+    //     this.inputTempBuffer.size,
+    //   )
+
+    //   this.device.queue.submit([commandEncoder.finish()])
+
+    //   // Debug
+    //   await resultBufferToRead.mapAsync(GPUMapMode.READ)
+    //   const result = new Uint32Array(resultBufferToRead.getMappedRange())
+    //   console.log('GPU', result)
+
+    //   let mistakes = 0
+    //   for (let i = 0; i < result.length; i++) {
+    //     if (i !== result.length - 1 && result[i]! > result[i + 1]!) {
+    //       mistakes++
+    //     }
+    //   }
+    //   console.log('mistakes', mistakes)
+    // }
   }
 
   public Dispose() {

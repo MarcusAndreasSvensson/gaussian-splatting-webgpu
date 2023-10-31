@@ -229,7 +229,8 @@ export class Preprocessor {
       context.adapter,
       context.device,
       this.tileDepthKeyBuffer,
-      this.numTiles,
+      numtilesX,
+      numtilesY,
       2 ** 8,
       this.renderer,
       this.intersectionOffsetBuffer,
@@ -596,7 +597,9 @@ export class Preprocessor {
       // tileDepthKeyToRead.getMappedRange(0, this.tileDepthKeyArrayLayout.size),
     )
 
-    const condition = (count: number) => count < 2 ** 9 && count > 2 ** 8
+    const condition = (count: number) => count < 2 ** 12 && count > 2 ** 11
+    // const condition = (count: number) => count < 2 ** 11 && count > 2 ** 10
+    // const condition = (count: number) => count < 2 ** 9 && count > 2 ** 8
 
     for (let i = 0; i < intersectionOffsetsCount.length; i++) {
       const count = intersectionOffsetsCount[i]!
@@ -652,9 +655,11 @@ export class Preprocessor {
     //   // this.numIntersections,
     // )
 
+    this.auxBufferRead.unmap()
+
     await this.bitonicTileSorter.sort(
       this.numIntersections,
-      intersectionOffsetsCount,
+      // intersectionOffsetsCount,
     )
 
     {
@@ -705,13 +710,13 @@ export class Preprocessor {
           console.log('tile', tile)
           console.log('tileKeys', tileKeys)
 
-          let mistakes = 0
+          const mistakes = []
           for (let i = 1; i < tileKeys.length; i++) {
             const prevKey = tileKeys[i - 1]
             const key = tileKeys[i]
 
             if (key! < prevKey!) {
-              mistakes++
+              mistakes.push([i, prevKey, key])
               // console.log('mistake', i, prevKey, key)
             }
           }
@@ -722,7 +727,5 @@ export class Preprocessor {
         }
       }
     }
-
-    this.auxBufferRead.unmap()
   }
 }

@@ -1,6 +1,11 @@
 const workgroup_size = 256u;
+// const inputs_per_thread = 4u;
+// const shared_memory_size = 1024u;
 const inputs_per_thread = 8u;
 const shared_memory_size = 2048u;
+// const inputs_per_thread = 16u;
+// const shared_memory_size = 4096u;
+
 struct Uniform {
   data: vec4<u32> 
 };
@@ -34,11 +39,13 @@ fn main(
   let input_count = offset_buffer_count[ group_id.x ];
 
 
-  for ( var i: u32 = 0u; i < inputs_per_thread; i++ ) {
-    let idx = local_idx * inputs_per_thread + i;
+  if (input_count < shared_memory_size) {
+    for ( var i: u32 = 0u; i < inputs_per_thread; i++ ) {
+      let idx = local_idx * inputs_per_thread + i;
 
-    if ( idx < input_count) {
-      sharedData[ idx ] = input_data[ input_offset + idx ];
+      if ( idx < input_count) {
+        sharedData[ idx ] = input_data[ input_offset + idx ];
+      }
     }
   }
 
@@ -46,33 +53,42 @@ fn main(
   storageBarrier();
 
 
+  // let num_loops = input_count / workgroup_size;
   var tmp: KeyValue;
 
-
+  
   for ( var sub_array_size: u32 = 2u; sub_array_size <= shared_memory_size; sub_array_size = sub_array_size << 1u ) {
     for ( var compare_dist: u32 = sub_array_size >> 1u; compare_dist > 0u; compare_dist = compare_dist >> 1u ) {
 
+      // for (var i: u32 = 0u; i < num_loops; i++) {
       for (var i: u32 = 0u; i < inputs_per_thread; i++) {
-        let local_idx_i = local_idx * inputs_per_thread + i;
-        let ixj: u32 =  (local_idx_i) ^ compare_dist;
-
-        if ( ixj > local_idx_i ) {
-
-          if ( ( local_idx_i & sub_array_size ) == 0u ) {
-            if ( sharedData[ local_idx_i ].key > sharedData[ ixj ].key ) {
-              tmp = sharedData[ local_idx_i ];
-              sharedData[ local_idx_i ] = sharedData[ ixj ];
-              sharedData[ ixj ] = tmp;
-            }
-          } else {
-            if ( sharedData[ local_idx_i ].key < sharedData[ ixj ].key ) {
-              tmp = sharedData[ local_idx_i ];
-              sharedData[ local_idx_i ] = sharedData[ ixj ];
-              sharedData[ ixj ] = tmp;
-            }
-          }
+        // if (inputs_per_thread - num_loops < num_loops) {
           
-        }
+        
+        // This culling makes it slower
+        // if (input_count < shared_memory_size) {
+
+          let local_idx_i = local_idx * inputs_per_thread + i;
+          let ixj: u32 =  (local_idx_i) ^ compare_dist;
+
+          if ( ixj > local_idx_i ) {
+            if ( ( local_idx_i & sub_array_size ) == 0u ) {
+              if ( sharedData[ local_idx_i ].key > sharedData[ ixj ].key ) {
+                tmp = sharedData[ local_idx_i ];
+                sharedData[ local_idx_i ] = sharedData[ ixj ];
+                sharedData[ ixj ] = tmp;
+              }
+            } else {
+              if ( sharedData[ local_idx_i ].key < sharedData[ ixj ].key ) {
+                tmp = sharedData[ local_idx_i ];
+                sharedData[ local_idx_i ] = sharedData[ ixj ];
+                sharedData[ ixj ] = tmp;
+              }
+            }  
+          }
+
+        // }
+        // }
 
         workgroupBarrier();
         storageBarrier();  
@@ -82,16 +98,20 @@ fn main(
   }
 
 
-  let output_offset = shared_memory_size - input_count;
-  
+  if (input_count < shared_memory_size) {
+    let output_offset = shared_memory_size - input_count;
+    
 
-  for (var i: u32 = 0u; i < inputs_per_thread; i++) {
-    let idx = local_idx * inputs_per_thread + i;
+    for (var i: u32 = 0u; i < inputs_per_thread; i++) {
+      let idx = local_idx * inputs_per_thread + i;
 
 
-    if (idx < input_count) {
-        input_data[input_offset + idx] = sharedData[output_offset + idx];
+      if (idx < input_count) {
+          input_data[input_offset + idx] = sharedData[output_offset + idx];
+      }
     }
   }
+
+  
 
 }

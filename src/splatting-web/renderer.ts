@@ -73,7 +73,7 @@ export class Renderer {
 
   preprocessor: Preprocessor
 
-  numTimestamps = 10
+  numTimestamps = 128
   currentTimeStamp = 0
   timeStampQuerySet: GPUQuerySet | null = null
   timeStampBuffer: GPUBuffer
@@ -105,6 +105,7 @@ export class Renderer {
       requiredLimits: {
         maxStorageBufferBindingSize: 1.5 * byteLength,
         maxBufferSize: 1.5 * byteLength,
+        maxComputeWorkgroupStorageSize: 2 ** 15,
       },
     }
 
