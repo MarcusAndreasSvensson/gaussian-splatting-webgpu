@@ -110,7 +110,7 @@ fn main(
   
   // let z_exp = exp((p_hom.z * p_w / 1.02) * 32.0);
   // let z_normalized = z_exp / exp(32.0);
-  let z_normalized = pow(min(p_hom.z * p_w, 0.999), 256.0);
+  let z_normalized = pow(min(p_hom.z * p_w, 0.999), 64.0);
 
   var clip_pos = vec4<f32>(
     p_hom.x * p_w,

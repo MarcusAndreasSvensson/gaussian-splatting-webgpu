@@ -604,6 +604,16 @@ export class Preprocessor {
     )
     console.log('intersectionOffsetsCount', intersectionOffsetsCount)
     // console.log(
+    //   'max',
+    //   Math.max(
+    //     ...intersectionOffsetsCount.slice(
+    //       0,
+    //       intersectionOffsetsCount.length - 1,
+    //     ),
+    //   ),
+    // )
+
+    // console.log(
     //   'intersectionOffsetsCount',
     //   intersectionOffsetsCount.at(-3),
     //   intersectionOffsetsCount.at(-2),

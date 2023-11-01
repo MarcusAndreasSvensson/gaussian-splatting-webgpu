@@ -66,7 +66,7 @@ export class Renderer {
 
   fpsCounter: HTMLLabelElement
   lastDraw: number
-  numTileDepthSections = 16
+  numTileDepthSections = 32
 
   destroyCallback: (() => void) | null = null
 
@@ -74,7 +74,7 @@ export class Renderer {
 
   preprocessor: Preprocessor
 
-  numTimestamps = 128
+  numTimestamps = 7
   currentTimeStamp = 0
   timeStampQuerySet: GPUQuerySet | null = null
   timeStampBuffer: GPUBuffer
