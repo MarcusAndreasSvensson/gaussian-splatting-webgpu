@@ -1,6 +1,7 @@
 const BLOCK_X = 16;
 const BLOCK_Y = 16;
 const num_gauss_unpaddded: i32 = 1;
+const num_depth_tiles = 2u;
 
 
 struct Uniforms {
@@ -86,7 +87,7 @@ fn main(
 
 
   let world_pos = vec4(point.position, 1.0);  
-  let camera_pos = uniforms.viewMatrix * world_pos;
+  // let camera_pos = uniforms.viewMatrix * world_pos;
 
   if(!in_frustum(world_pos)) {
     return;
@@ -100,14 +101,28 @@ fn main(
   }
 
   let p_hom = uniforms.projMatrix * world_pos;
-  let p_w = 1.0f / (p_hom.w + 0.0000001f);
+  let p_w = 1.0f / (p_hom.w + 0.00000001f);
+
+  // Apply the logarithm to the z component and normalize it to the range 0-1
+  // let z_log = log(p_hom.z * p_w + 1.0);
+  // let z_normalized = z_log / log(2.0);
+  // Apply the inverse logarithm (exponential) to the z component
+  
+  // let z_exp = exp((p_hom.z * p_w / 1.02) * 32.0);
+  // let z_normalized = z_exp / exp(32.0);
+  let z_normalized = pow(min(p_hom.z * p_w, 0.999), 256.0);
 
   var clip_pos = vec4<f32>(
     p_hom.x * p_w,
     p_hom.y * p_w,
-    p_hom.z * p_w,
+    // p_hom.z * p_w,
+    // p_hom.z * p_w - 0.02,
+    // z_exp,
+    z_normalized,
     p_hom.w * p_w
   );
+
+  // let test = uniforms.projMatrix * uniforms.viewMatrix * world_pos;
 
 
   let point_uv = (clip_pos.xy * 0.5) + 0.5;
@@ -141,7 +156,7 @@ fn main(
 
   let radius_px: i32 = i32(ceil(3. * sqrt(max(lambda_1, lambda_2))));
 
-  let rect = getRect(
+  let rect: vec4<u32> = getRect(
     point_uv,
     radius_px,
     vec2<u32>(u32(uniforms.screen_size.x), u32(uniforms.screen_size.y))
@@ -175,12 +190,30 @@ fn main(
   
   let color = compute_color_from_sh(world_pos.xyz, point.sh);
 
-  let tiles_touched = (rect_max.y - rect_min.y) * (rect_max.x - rect_min.x);
+  let tiles_touched: u32 = (rect_max.y - rect_min.y) * (rect_max.x - rect_min.x);
+  // let depth_tile_idx: u32 = 0u;
+  // let depth_tile_idx: u32 = 2u;
+  // let depth_tile_idx: u32 = u32( ceil(clip_pos.z * f32(num_depth_tiles)) ) - 1u;
+  // let depth_tile_idx: u32 = u32( round(clip_pos.z * f32(num_depth_tiles)) ) - 1u;
+
+  // let depth_tile_idx: u32 = num_depth_tiles - u32( floor(clip_pos.z * f32(num_depth_tiles)) );
+  // let depth_tile_idx: u32 = u32( floor(clip_pos.z * f32(num_depth_tiles)) );
+  // let depth_tile_idx: u32 = u32( floor(clip_pos.z * f32(8)) );
+  // let depth_tile_idx: u32 = u32( floor(clip_pos.z) );
+  // let depth_tile_idx: u32 = u32( floor(clip_pos.z - 0.01) );
+  // let depth_tile_idx: u32 = u32( floor((clip_pos.z - 0.01) * 8.0) );
+  // let depth_tile_idx: u32 = u32( floor(0.8 * 8.0 - 0.01) );
+
+  let depth_tile_idx: u32 = u32( floor(clip_pos.z * f32(num_depth_tiles) - 0.01) );
+  // let depth_tile_idx: u32 = u32( floor(clip_pos.z * 8.0 - 0.01) );
   
   // get x and y of every tile touched
   for (var y = rect_min.y; y < rect_max.y; y++) {
     for (var x = rect_min.x; x < rect_max.x; x++) {
-      let idx = y * num_tiles.x + x;
+      // let idx = (x + y * num_tiles.x) * num_depth_tiles + depth_tile_idx;
+      let idx = (x + y * num_tiles.x) * num_depth_tiles + depth_tile_idx;
+      // let idx = x + y * num_tiles.x;
+      
       atomicAdd(&intersection_offsets[idx], 1u);
     }
   }
@@ -190,6 +223,8 @@ fn main(
   let gauss_data = GaussData(
     i,
     radius_px,
+    // 1.0,
+    // test.z / test.w,
     clip_pos.z,
     point_uv,
     conic,
@@ -203,8 +238,34 @@ fn main(
   atomicAdd(&auxData.num_intersections, tiles_touched);
   atomicMin(&auxData.min_depth, i32(clip_pos.z * 1000000.0));
   atomicMax(&auxData.max_depth, i32(clip_pos.z * 1000000.0));
+  // atomicMin(&auxData.min_depth, i32(clip_pos.z * 1000000.0));
+  // atomicMax(&auxData.max_depth, i32(clip_pos.z * 1000000.0));
 
 }
+
+fn logarithmicSubdivision() -> array<f32, num_depth_tiles> {
+    let n = i32(num_depth_tiles);
+    var logspace: array<f32, num_depth_tiles>;
+    for (var i = 0; i < n; i = i + 1) {
+        logspace[i] = pow(10.0, f32(i) / f32(n - 1));
+    }
+    let min: f32 = logspace[0];
+    let max: f32 = logspace[n - 1];
+
+    var normalized: array<f32, num_depth_tiles>;
+
+    for (var i = 0; i < n; i = i + 1) {
+        normalized[i] = 1.0 - ((logspace[i] - min) / (max - min));
+    }
+
+    for (var i = 0; i < n / 2; i = i + 1) {
+        let temp: f32 = normalized[i];
+        normalized[i] = normalized[n - i - 1];
+        normalized[n - i - 1] = temp;
+    }
+    return normalized;
+}
+
 
 
 fn in_frustum(world_pos: vec4<f32>) -> bool {

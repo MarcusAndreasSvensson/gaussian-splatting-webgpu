@@ -66,6 +66,7 @@ export class Renderer {
 
   fpsCounter: HTMLLabelElement
   lastDraw: number
+  numTileDepthSections = 16
 
   destroyCallback: (() => void) | null = null
 
@@ -305,12 +306,17 @@ export class Renderer {
       layout: computePipelineLayout,
       compute: {
         module: this.context.device.createShaderModule({
-          code: computeKernel.replace(
-            'const intersection_array_length = 1;',
-            `const intersection_array_length = ${
-              this.preprocessor.radixSorter.buf_data.size / (4 * 2)
-            };`,
-          ),
+          code: computeKernel
+            .replace(
+              'const intersection_array_length = 1;',
+              `const intersection_array_length = ${
+                this.preprocessor.radixSorter.buf_data.size / (4 * 2)
+              };`,
+            )
+            .replace(
+              'const num_depth_tiles = 2;',
+              `const num_depth_tiles = ${this.numTileDepthSections};`,
+            ),
         }),
         entryPoint: 'main',
       },

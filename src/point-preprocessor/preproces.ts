@@ -143,7 +143,10 @@ export class Preprocessor {
 
     this.prefixArrayLayout = new StaticArray(prefixLayout, this.numThreads)
 
-    this.intersectionOffsetArrayLayout = new StaticArray(u32, this.numTiles)
+    this.intersectionOffsetArrayLayout = new StaticArray(
+      u32,
+      this.numTiles * renderer.numTileDepthSections,
+    )
 
     this.resultBuffer = this.context.device.createBuffer({
       size: this.resultArrayLayout.size,
@@ -243,10 +246,15 @@ export class Preprocessor {
       bindGroupLayouts: [computeBindGroupLayout],
     })
 
-    const gaussShaderWithParams = gaussShader.replace(
-      'const num_gauss_unpaddded: i32 = 1;',
-      `const num_gauss_unpaddded: i32 = ${this.numGaussians};`,
-    )
+    const gaussShaderWithParams = gaussShader
+      .replace(
+        'const num_gauss_unpaddded: i32 = 1;',
+        `const num_gauss_unpaddded: i32 = ${this.numGaussians};`,
+      )
+      .replace(
+        'const num_depth_tiles = 2u;',
+        `const num_depth_tiles = ${this.renderer.numTileDepthSections}u;`,
+      )
 
     this.pipeline = this.context.device.createComputePipeline({
       layout: this.pipelineLayout,
@@ -262,10 +270,15 @@ export class Preprocessor {
     })
 
     const intersectionOffsetPrefixSumShaderWithParams =
-      intersectionOffsetPrefixSumShader.replace(
-        'const num_tiles: i32 = 1;',
-        `const num_tiles: i32 = ${this.numTiles};`,
-      )
+      intersectionOffsetPrefixSumShader
+        .replace(
+          'const num_tiles: i32 = 1;',
+          `const num_tiles: i32 = ${this.numTiles};`,
+        )
+        .replace(
+          'const num_depth_tiles = 2;',
+          `const num_depth_tiles = ${this.renderer.numTileDepthSections};`,
+        )
 
     this.intersectionOffsetPrefixSumPipeline =
       this.context.device.createComputePipeline({
@@ -291,6 +304,10 @@ export class Preprocessor {
         `const intersection_array_length = ${
           this.radixSorter.buf_data.size / (4 * 2)
         };`,
+      )
+      .replace(
+        'const num_depth_tiles = 2u;',
+        `const num_depth_tiles = ${this.renderer.numTileDepthSections}u;`,
       )
 
     this.tileDepthKeyPipeline = this.context.device.createComputePipeline({
@@ -443,12 +460,20 @@ export class Preprocessor {
       label: 'preprocessor.intersectionOffsetCountToRead',
     })
 
-    // Debug
-    const tileDepthKeyToRead = this.context.device.createBuffer({
-      size: this.tileDepthKeyArrayLayout.size,
+    // // Debug
+    // const tileDepthKeyToRead = this.context.device.createBuffer({
+    //   size: this.tileDepthKeyArrayLayout.size,
+    //   usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    //   mappedAtCreation: false,
+    //   label: 'preprocessor.tileDepthKeyToRead',
+    // })
+
+    // Debug gaussians
+    const gaussiansToRead = this.context.device.createBuffer({
+      size: this.resultBuffer.size,
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
       mappedAtCreation: false,
-      label: 'preprocessor.tileDepthKeyToRead',
+      label: 'preprocessor.gaussiansToRead',
     })
 
     const commandEncoder = this.context.device.createCommandEncoder()
@@ -517,15 +542,25 @@ export class Preprocessor {
       this.intersectionOffsetArrayLayout.size,
     )
 
+    // // Debug
+    // commandEncoder.copyBufferToBuffer(
+    //   this.tileDepthKeyBuffer,
+    //   0,
+    //   tileDepthKeyToRead,
+    //   0,
+    //   this.tileDepthKeyArrayLayout.size,
+    // )
+
     // Debug
     commandEncoder.copyBufferToBuffer(
-      this.tileDepthKeyBuffer,
+      this.resultBuffer,
       0,
-      tileDepthKeyToRead,
+      gaussiansToRead,
       0,
-      this.tileDepthKeyArrayLayout.size,
+      this.resultArrayLayout.size,
     )
 
+    // NOT DEBUG
     this.context.device.queue.submit([commandEncoder.finish()])
 
     // Debug
@@ -541,19 +576,19 @@ export class Preprocessor {
       ),
     )
     console.log('intersectionOffsets', intersectionOffsets)
-    console.log(
-      'intersectionOffsets',
-      intersectionOffsets.at(-3),
-      intersectionOffsets.at(-2),
-      intersectionOffsets.at(-1),
-    )
-    console.log(
-      'intersectionOffsets',
-      intersectionOffsets.at(-2)! - intersectionOffsets.at(-3)!,
-      intersectionOffsets.at(-1)! - intersectionOffsets.at(-2)!,
-    )
+    // console.log(
+    //   'intersectionOffsets',
+    //   intersectionOffsets.at(-3),
+    //   intersectionOffsets.at(-2),
+    //   intersectionOffsets.at(-1),
+    // )
+    // console.log(
+    //   'intersectionOffsets',
+    //   intersectionOffsets.at(-2)! - intersectionOffsets.at(-3)!,
+    //   intersectionOffsets.at(-1)! - intersectionOffsets.at(-2)!,
+    // )
 
-    // intersectionOffsetToRead.unmap()
+    // // intersectionOffsetToRead.unmap()
 
     // Debug
     await intersectionOffsetCountToRead.mapAsync(
@@ -568,14 +603,37 @@ export class Preprocessor {
       ),
     )
     console.log('intersectionOffsetsCount', intersectionOffsetsCount)
-    console.log(
-      'intersectionOffsetsCount',
-      intersectionOffsetsCount.at(-3),
-      intersectionOffsetsCount.at(-2),
-      intersectionOffsetsCount.at(-1),
-    )
-    // intersectionOffsetCountToRead.unmap()
+    // console.log(
+    //   'intersectionOffsetsCount',
+    //   intersectionOffsetsCount.at(-3),
+    //   intersectionOffsetsCount.at(-2),
+    //   intersectionOffsetsCount.at(-1),
+    // )
+    // // intersectionOffsetCountToRead.unmap()
 
+    // // Debug
+    // await gaussiansToRead.mapAsync(
+    //   GPUMapMode.READ,
+    //   0,
+    //   this.resultArrayLayout.size,
+    // )
+    // const gaussians = this.resultArrayLayout.unpack(
+    //   0,
+    //   new DataView(
+    //     // gaussiansToRead.getMappedRange(0, resultLayout.size * 10000),
+    //     gaussiansToRead.getMappedRange(0, this.resultArrayLayout.size),
+    //   ),
+    // )[1]!
+    // const depths = []
+    // for (let i = 0; i < 5000; i++) {
+    //   // for (let i = 0; i < gaussians.length; i++) {
+    //   depths.push(gaussians[i]!.depth)
+    // }
+    // // const depths = gaussians.map((g) => g.depth)
+    // // console.log('gaussians', gaussians)
+    // console.log('depths', depths)
+
+    // NOT DEBUG
     await this.auxBufferRead.mapAsync(GPUMapMode.READ, 0, 4)
     this.numIntersections = new Uint32Array(
       this.auxBufferRead.getMappedRange(0, 4),
@@ -583,56 +641,58 @@ export class Preprocessor {
 
     console.log('numIntersections', this.numIntersections)
 
-    // Debug
-    await tileDepthKeyToRead.mapAsync(
-      GPUMapMode.READ,
-      0,
-      this.tileDepthKeyArrayLayout.size,
-    )
-    const tileDepthKey = new Uint32Array(
-      tileDepthKeyToRead.getMappedRange(
-        this.tileDepthKeyArrayLayout.size - this.numIntersections * 2 * 4,
-        this.numIntersections * 2 * 4,
-      ),
-      // tileDepthKeyToRead.getMappedRange(0, this.tileDepthKeyArrayLayout.size),
-    )
+    // // Debug
+    // await tileDepthKeyToRead.mapAsync(
+    //   GPUMapMode.READ,
+    //   0,
+    //   this.tileDepthKeyArrayLayout.size,
+    // )
+    // const tileDepthKey = new Uint32Array(
+    //   tileDepthKeyToRead.getMappedRange(
+    //     this.tileDepthKeyArrayLayout.size - this.numIntersections * 2 * 4,
+    //     this.numIntersections * 2 * 4,
+    //   ),
+    //   // tileDepthKeyToRead.getMappedRange(0, this.tileDepthKeyArrayLayout.size),
+    // )
 
-    const condition = (count: number) => count < 2 ** 12 && count > 2 ** 11
-    // const condition = (count: number) => count < 2 ** 11 && count > 2 ** 10
-    // const condition = (count: number) => count < 2 ** 9 && count > 2 ** 8
+    // console.log('tileDepthKey', tileDepthKey)
 
-    for (let i = 0; i < intersectionOffsetsCount.length; i++) {
-      const count = intersectionOffsetsCount[i]!
-      const offset = intersectionOffsets[i]!
+    // const condition = (count: number) => count < 2 ** 12 && count > 2 ** 11
+    // // const condition = (count: number) => count < 2 ** 11 && count > 2 ** 10
+    // // const condition = (count: number) => count < 2 ** 9 && count > 2 ** 8
 
-      if (condition(count)) {
-        // if (count < 256) {
-        console.log('count', i, count, offset)
+    // for (let i = 0; i < intersectionOffsetsCount.length; i++) {
+    //   const count = intersectionOffsetsCount[i]!
+    //   const offset = intersectionOffsets[i]!
 
-        const tile = tileDepthKey.slice(offset * 2, (offset + count) * 2 + 2)
+    //   if (condition(count)) {
+    //     // if (count < 256) {
+    //     console.log('count', i, count, offset)
 
-        const tileKeys = tile.filter((_, i) => i % 2 === 0)
+    //     const tile = tileDepthKey.slice(offset * 2, (offset + count) * 2 + 2)
 
-        console.log('tile', tile)
-        console.log('tileKeys', tileKeys)
+    //     const tileKeys = tile.filter((_, i) => i % 2 === 0)
 
-        let mistakes = 0
-        for (let i = 1; i < tileKeys.length; i++) {
-          const prevKey = tileKeys[i - 1]
-          const key = tileKeys[i]
+    //     console.log('tile', tile)
+    //     console.log('tileKeys', tileKeys)
 
-          if (key! < prevKey!) {
-            mistakes++
-          }
-        }
+    //     let mistakes = 0
+    //     for (let i = 1; i < tileKeys.length; i++) {
+    //       const prevKey = tileKeys[i - 1]
+    //       const key = tileKeys[i]
 
-        console.log('mistakes', mistakes)
+    //       if (key! < prevKey!) {
+    //         mistakes++
+    //       }
+    //     }
 
-        break
-      }
-    }
+    //     console.log('mistakes', mistakes)
 
-    tileDepthKeyToRead.unmap()
+    //     break
+    //   }
+    // }
+
+    // tileDepthKeyToRead.unmap()
 
     // const mistakes = []
     // for (let i = 1; i < tileDepthKey.length; i += 2) {
@@ -655,77 +715,78 @@ export class Preprocessor {
     //   // this.numIntersections,
     // )
 
+    // NOT DEBUG
     this.auxBufferRead.unmap()
 
-    await this.bitonicTileSorter.sort(
-      this.numIntersections,
-      // intersectionOffsetsCount,
-    )
+    // await this.bitonicTileSorter.sort(
+    //   this.numIntersections,
+    //   // intersectionOffsetsCount,
+    // )
 
-    {
-      const commandEncoder = this.context.device.createCommandEncoder()
+    // {
+    //   const commandEncoder = this.context.device.createCommandEncoder()
 
-      // Debug
-      commandEncoder.copyBufferToBuffer(
-        this.tileDepthKeyBuffer,
-        0,
-        tileDepthKeyToRead,
-        0,
-        this.tileDepthKeyArrayLayout.size,
-      )
+    //   // Debug
+    //   commandEncoder.copyBufferToBuffer(
+    //     this.tileDepthKeyBuffer,
+    //     0,
+    //     tileDepthKeyToRead,
+    //     0,
+    //     this.tileDepthKeyArrayLayout.size,
+    //   )
 
-      this.context.device.queue.submit([commandEncoder.finish()])
+    //   this.context.device.queue.submit([commandEncoder.finish()])
 
-      // Debug
-      await tileDepthKeyToRead.mapAsync(
-        GPUMapMode.READ,
-        0,
-        this.tileDepthKeyArrayLayout.size,
-      )
-      const tileDepthKeySorted = new Uint32Array(
-        tileDepthKeyToRead.getMappedRange(
-          this.tileDepthKeyArrayLayout.size - this.numIntersections * 2 * 4,
-          this.numIntersections * 2 * 4,
-        ),
-        // tileDepthKeyToRead.getMappedRange(0, this.tileDepthKeyArrayLayout.size),
-      )
+    //   // Debug
+    //   await tileDepthKeyToRead.mapAsync(
+    //     GPUMapMode.READ,
+    //     0,
+    //     this.tileDepthKeyArrayLayout.size,
+    //   )
+    //   const tileDepthKeySorted = new Uint32Array(
+    //     tileDepthKeyToRead.getMappedRange(
+    //       this.tileDepthKeyArrayLayout.size - this.numIntersections * 2 * 4,
+    //       this.numIntersections * 2 * 4,
+    //     ),
+    //     // tileDepthKeyToRead.getMappedRange(0, this.tileDepthKeyArrayLayout.size),
+    //   )
 
-      // console.log('tileDepthKeySorted', tileDepthKeySorted)
+    //   // console.log('tileDepthKeySorted', tileDepthKeySorted)
 
-      for (let i = 0; i < intersectionOffsetsCount.length; i++) {
-        const count = intersectionOffsetsCount[i]!
-        const offset = intersectionOffsets[i]!
+    //   for (let i = 0; i < intersectionOffsetsCount.length; i++) {
+    //     const count = intersectionOffsetsCount[i]!
+    //     const offset = intersectionOffsets[i]!
 
-        if (condition(count)) {
-          // if (count < 256) {
-          console.log('count', i, count, offset)
+    //     if (condition(count)) {
+    //       // if (count < 256) {
+    //       console.log('count', i, count, offset)
 
-          const tile = tileDepthKeySorted.slice(
-            offset * 2,
-            (offset + count) * 2 + 2,
-          )
+    //       const tile = tileDepthKeySorted.slice(
+    //         offset * 2,
+    //         (offset + count) * 2 + 2,
+    //       )
 
-          const tileKeys = tile.filter((_, i) => i % 2 === 0)
+    //       const tileKeys = tile.filter((_, i) => i % 2 === 0)
 
-          console.log('tile', tile)
-          console.log('tileKeys', tileKeys)
+    //       console.log('tile', tile)
+    //       console.log('tileKeys', tileKeys)
 
-          const mistakes = []
-          for (let i = 1; i < tileKeys.length; i++) {
-            const prevKey = tileKeys[i - 1]
-            const key = tileKeys[i]
+    //       const mistakes = []
+    //       for (let i = 1; i < tileKeys.length; i++) {
+    //         const prevKey = tileKeys[i - 1]
+    //         const key = tileKeys[i]
 
-            if (key! < prevKey!) {
-              mistakes.push([i, prevKey, key])
-              // console.log('mistake', i, prevKey, key)
-            }
-          }
+    //         if (key! < prevKey!) {
+    //           mistakes.push([i, prevKey, key])
+    //           // console.log('mistake', i, prevKey, key)
+    //         }
+    //       }
 
-          console.log('mistakes', mistakes)
+    //       console.log('mistakes', mistakes)
 
-          break
-        }
-      }
-    }
+    //       break
+    //     }
+    //   }
+    // }
   }
 }

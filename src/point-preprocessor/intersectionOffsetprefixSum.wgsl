@@ -1,4 +1,5 @@
 const num_tiles: i32 = 1;
+const num_depth_tiles = 2;
 
 
 struct Uniforms {
@@ -67,7 +68,7 @@ fn main(
   var sum: u32 = 0u;
   var tmp: u32 = 0u;
 
-  for (var i = 0; i < num_tiles; i++) {
+  for (var i = 0; i < num_tiles * num_depth_tiles; i++) {
     tmp = intersection_offsets[i];
     intersection_offsets[i] = sum;
     sum += tmp;
