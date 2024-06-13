@@ -9,6 +9,7 @@ import {
   vec3,
 } from '@/splatting-web/packing'
 import { PackedGaussians } from '@/splatting-web/ply'
+import { RadixSortKernel } from 'webgpu-radix-sort'
 
 import { GpuContext } from '@/point-preprocessor/gpuContext'
 import { Renderer } from '@/splatting-web/renderer'
@@ -100,6 +101,7 @@ export class Preprocessor {
   numTiles: number
 
   radixSorter: RadixSort
+  radixSortKernel: typeof RadixSortKernel
 
   renderer: Renderer
 
@@ -215,6 +217,20 @@ export class Preprocessor {
       this.renderer,
     )
 
+    this.radixSortKernel = new RadixSortKernel({
+      device: this.context.device, // GPUDevice to use
+      keys: this.tileDepthKeyBuffer, // GPUBuffer containing the keys to sort
+      // keys: keysBuffer, // GPUBuffer containing the keys to sort
+      // values: valuesBuffer, // (optional) GPUBuffer containing the associated values
+      count: this.tileDepthKeyArrayLayout.nElements, // Number of elements to sort
+      // count: keys.length, // Number of elements to sort
+      check_order: false, // Whether to check if the input is already sorted to exit early
+      bit_count: 32, // Number of bits per element. Must be a multiple of 4 (default: 32)
+      workgroup_size: { x: 16, y: 16 }, // Workgroup size in x and y dimensions. (x * y) must be a power of two
+    })
+
+    console.log('this.radixSortKernel', this.radixSortKernel)
+
     const computeBindGroupLayout = this.createUniforms()
 
     this.pipelineLayout = this.context.device.createPipelineLayout({
@@ -312,6 +328,8 @@ export class Preprocessor {
         entryPoint: 'main',
       },
     })
+
+    console.info('Preprocessor initialized')
   }
 
   private createUniforms() {
@@ -420,6 +438,8 @@ export class Preprocessor {
 
     console.log('this.resultArrayLayout', this.resultArrayLayout)
 
+    console.log('Uniforms initialized')
+
     return computeBindGroupLayout
   }
 
@@ -503,6 +523,13 @@ export class Preprocessor {
       numTilesArray,
       // this.numIntersections,
     )
+
+    ///
+    // const encoder = this.context.device.createCommandEncoder()
+    // const pass = encoder.beginComputePass()
+    // this.radixSortKernel.dispatch(pass) // Sort keysBuffer and valuesBuffer in-place on the GPU
+    // pass.end()
+    ///
 
     this.auxBufferRead.unmap()
 

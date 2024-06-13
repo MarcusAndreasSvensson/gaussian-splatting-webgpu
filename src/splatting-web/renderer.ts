@@ -393,15 +393,13 @@ export class Renderer {
   }
 
   timestamp(encoder: GPUCommandEncoder, label: string) {
-    if (!this.timeStampQuerySet) return
-
-    encoder.writeTimestamp(this.timeStampQuerySet, this.currentTimeStamp)
-    this.timeStampLabels[this.currentTimeStamp] = label
-    this.currentTimeStamp++
-
-    if (this.currentTimeStamp >= this.numTimestamps) {
-      this.currentTimeStamp = 0
-    }
+    // if (!this.timeStampQuerySet) return
+    // encoder.writeTimestamp(this.timeStampQuerySet, this.currentTimeStamp)
+    // this.timeStampLabels[this.currentTimeStamp] = label
+    // this.currentTimeStamp++
+    // if (this.currentTimeStamp >= this.numTimestamps) {
+    //   this.currentTimeStamp = 0
+    // }
   }
 
   async readBuffer(device: GPUDevice, buffer: GPUBuffer) {

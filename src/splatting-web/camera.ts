@@ -381,7 +381,9 @@ function cameraFromJSON(
   const projectionMatrix = getProjectionMatrix(0.2, 100, fovX, fovY)
 
   const R = mat3.create(...rawCamera.rotation.flat())
-  const T = rawCamera.position
+  // const T = rawCamera.position
+  const T = new Float32Array(16)
+  T.set(rawCamera.position)
 
   const viewMatrix = worldToCamFromRT(R, T)
 
