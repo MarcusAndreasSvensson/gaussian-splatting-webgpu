@@ -281,7 +281,7 @@ export class Renderer {
         },
         {
           binding: 3,
-          resource: { buffer: this.preprocessor.radixSorter.buf_data },
+          resource: { buffer: this.preprocessor.tileDepthKeyBuffer },
         },
         {
           binding: 4,
@@ -293,6 +293,8 @@ export class Renderer {
         },
       ],
     })
+
+    console.log('this.computeBindGroup', this.computeBindGroup)
 
     // COMPUTE PIPELINE
 
@@ -307,7 +309,7 @@ export class Renderer {
           code: computeKernel.replace(
             'const intersection_array_length = 1;',
             `const intersection_array_length = ${
-              this.preprocessor.radixSorter.buf_data.size / (4 * 2)
+              this.preprocessor.tileDepthKeyBuffer.size / (4 * 2)
             };`,
           ),
         }),
@@ -422,27 +424,26 @@ export class Renderer {
   }
 
   printTimestampsWithLabels(timingsNanoseconds: BigInt64Array) {
-    if (!this.timeStampQuerySet) return
-    console.log('==========')
-    // Convert list of nanosecond timestamps to diffs in milliseconds
-    const timeDiffs = []
-    for (let i = 1; i < timingsNanoseconds.length; i++) {
-      let diff = Number(timingsNanoseconds[i]! - timingsNanoseconds[i - 1]!)
-      diff /= 1_000_000
-      timeDiffs.push(diff)
-    }
-
-    // Print each diff with its associated label
-    for (let i = 0; i < timeDiffs.length; i++) {
-      const time = timeDiffs[i]
-      const label = this.timeStampLabels[i + 1]
-      if (label) {
-        console.log(label, time?.toFixed(2) + 'ms')
-      } else {
-        console.log(i, time?.toFixed(2) + 'ms')
-      }
-    }
-    console.log('==========')
+    // if (!this.timeStampQuerySet) return
+    // console.log('==========')
+    // // Convert list of nanosecond timestamps to diffs in milliseconds
+    // const timeDiffs = []
+    // for (let i = 1; i < timingsNanoseconds.length; i++) {
+    //   let diff = Number(timingsNanoseconds[i]! - timingsNanoseconds[i - 1]!)
+    //   diff /= 1_000_000
+    //   timeDiffs.push(diff)
+    // }
+    // // Print each diff with its associated label
+    // for (let i = 0; i < timeDiffs.length; i++) {
+    //   const time = timeDiffs[i]
+    //   const label = this.timeStampLabels[i + 1]
+    //   if (label) {
+    //     console.log(label, time?.toFixed(2) + 'ms')
+    //   } else {
+    //     console.log(i, time?.toFixed(2) + 'ms')
+    //   }
+    // }
+    // console.log('==========')
   }
 
   private destroyImpl() {

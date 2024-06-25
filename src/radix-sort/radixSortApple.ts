@@ -147,7 +147,7 @@ function GetPipelineRadixScanSync(
 export class RadixSort {
   engine_ctx: GpuContext
 
-  buf_data: GPUBuffer
+  // buf_data: GPUBuffer
   buf_tmp: GPUBuffer[]
 
   bits = 32
@@ -201,12 +201,12 @@ export class RadixSort {
     )
     console.log('this.num_groups_scatter', this.num_groups_scatter)
 
-    this.buf_data = engine_ctx.createBuffer0(
-      this.count * 4 * numInts,
-      GPUBufferUsage.STORAGE |
-        GPUBufferUsage.COPY_SRC |
-        GPUBufferUsage.COPY_DST,
-    )
+    // this.buf_data = engine_ctx.createBuffer0(
+    //   this.count * 4 * numInts,
+    //   GPUBufferUsage.STORAGE |
+    //     GPUBufferUsage.COPY_SRC |
+    //     GPUBufferUsage.COPY_DST,
+    // )
 
     this.buf_tmp = new Array(2)
     this.buf_tmp[0] = engine_ctx.createBuffer0(
@@ -348,8 +348,9 @@ export class RadixSort {
     }
 
     if (
-      hInput.size !== this.count * 4 * this.numInts ||
-      hInput.size !== this.buf_data.size
+      hInput.size !==
+      this.count * 4 * this.numInts
+      // || hInput.size !== this.buf_data.size
     ) {
       throw new Error('Input buffer size does not match the size of the sorter')
     }
@@ -465,7 +466,8 @@ export class RadixSort {
       commandEncoder.copyBufferToBuffer(
         this.buf_tmp[j]!,
         0,
-        this.buf_data,
+        hInput,
+        // this.buf_data,
         0,
         this.buf_tmp[j]!.size,
       )
@@ -477,7 +479,7 @@ export class RadixSort {
     }
 
     return {
-      values: this.buf_data,
+      values: hInput,
     }
   }
 }
